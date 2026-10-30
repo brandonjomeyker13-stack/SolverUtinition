@@ -1,3 +1,4 @@
+import secrets
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy.orm import Session
@@ -58,6 +59,34 @@ class AuthService:
         return usuario
 
     def autenticar_con_google(self, id_token: str) -> Usuario:
+        usuario, _, _, _ = self._usuario_desde_google(id_token)
+        if usuario is None:
+            raise NotFoundError(
+                "No hay una cuenta registrada con ese correo de Google. "
+                "Crea tu cuenta primero y después entra con Google.",
+                codigo=CUENTA_NO_REGISTRADA,
+            )
+        return usuario
+
+    def registrar_con_google(self, id_token: str) -> Usuario:
+        usuario, email, sub, nombre = self._usuario_desde_google(id_token)
+        if usuario is not None:
+            return usuario
+
+        usuario = self.usuarios.create(
+            Usuario(
+                nombre=nombre,
+                email=email,
+                password_hash=hash_password(secrets.token_urlsafe(32)),
+                google_sub=sub,
+            )
+        )
+        self._asegurar_ratings(usuario.id)
+        self.db.commit()
+        self.db.refresh(usuario)
+        return usuario
+
+    def _usuario_desde_google(self, id_token: str) -> tuple[Usuario | None, str, str, str]:
         claims = verificar_id_token_google(id_token)
         email = (claims.get("email") or "").strip().lower()
         sub = claims.get("sub")
@@ -66,19 +95,19 @@ class AuthService:
         if not claims.get("email_verified"):
             raise UnauthorizedError("El correo de Google no está verificado")
 
+        nombre = (claims.get("name") or email.split("@")[0] or "Jugador").strip()
+        if len(nombre) < 2:
+            nombre = "Jugador"
+
         por_sub = self.usuarios.get_by_google_sub(sub)
         if por_sub is not None:
             if not por_sub.activo:
                 raise UnauthorizedError("Usuario no válido")
-            return por_sub
+            return por_sub, email, sub, nombre
 
         usuario = self.usuarios.get_by_email(email)
         if usuario is None:
-            raise NotFoundError(
-                "No hay una cuenta registrada con ese correo de Google. "
-                "Crea tu cuenta primero y después entra con Google.",
-                codigo=CUENTA_NO_REGISTRADA,
-            )
+            return None, email, sub, nombre
         if not usuario.activo:
             raise UnauthorizedError("Usuario no válido")
         if usuario.google_sub and usuario.google_sub != sub:
@@ -87,7 +116,7 @@ class AuthService:
         usuario.google_sub = sub
         self.db.commit()
         self.db.refresh(usuario)
-        return usuario
+        return usuario, email, sub, nombre
 
     def emitir_tokens(self, usuario: Usuario, ip: str | None, user_agent: str | None) -> tuple[str, str]:
         access = create_access_token(subject=str(usuario.id))

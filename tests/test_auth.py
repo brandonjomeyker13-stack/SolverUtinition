@@ -63,6 +63,19 @@ def test_google_con_cuenta_vincula_y_entra(db, usuario_a):
     assert usuario.google_sub == "google-ana"
 
 
+def test_registro_google_crea_cuenta_en_1000(db):
+    service = AuthService(db)
+    with patch(
+        "app.services.auth_service.verificar_id_token_google",
+        return_value=_claims(email="nueva@prueba.com", sub="google-nueva"),
+    ):
+        usuario = service.registrar_con_google("token-falso")
+    perfil = service.perfil(usuario)
+    assert usuario.email == "nueva@prueba.com"
+    assert usuario.google_sub == "google-nueva"
+    assert {r.elo for r in perfil.ratings} == {1000}
+
+
 def test_google_correo_no_verificado(db, usuario_a):
     service = AuthService(db)
     claims = _claims()

@@ -101,6 +101,24 @@ def login_con_google(
     return TokenResponse(access_token=access, usuario=service.perfil(usuario))
 
 
+@router.post("/google/registro", response_model=TokenResponse, status_code=201)
+def registro_con_google(
+    data: GoogleAuthRequest,
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+):
+    service = AuthService(db)
+    usuario = service.registrar_con_google(data.id_token)
+    access, refresh = service.emitir_tokens(
+        usuario,
+        ip=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+    )
+    _set_refresh_cookie(response, refresh)
+    return TokenResponse(access_token=access, usuario=service.perfil(usuario))
+
+
 @router.post("/refresh", response_model=TokenResponse)
 def refrescar(request: Request, response: Response, db: Session = Depends(get_db)):
     raw = request.cookies.get(settings.REFRESH_TOKEN_COOKIE_NAME)
