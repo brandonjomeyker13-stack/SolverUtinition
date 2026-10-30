@@ -22,8 +22,9 @@ class Settings(BaseSettings):
     DATABASE_URL: str
     JWT_SECRET_KEY: str
     JWT_ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
-    REFRESH_TOKEN_EXPIRE_DAYS: int = 30
+    # El access vive en el navegador. 7 días para no pedir login al cerrar la pestaña.
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 60
     REFRESH_TOKEN_COOKIE_NAME: str = "refresh_token"
 
     FRONTEND_URL: str = "https://solucionador-de-uso-front.vercel.app"

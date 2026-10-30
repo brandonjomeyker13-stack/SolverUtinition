@@ -6,7 +6,7 @@ from app.core.deps import get_current_usuario
 from app.core.exceptions import UnauthorizedError
 from app.db.session import get_db
 from app.models.usuario import Usuario
-from app.schemas.auth import GoogleAuthRequest, LoginRequest, RegistroRequest, TokenResponse
+from app.schemas.auth import GoogleAuthRequest, LoginRequest, RefreshRequest, RegistroRequest, TokenResponse
 from app.schemas.usuario import PerfilOut
 from app.services.auth_service import AuthService
 
@@ -55,7 +55,9 @@ def registrar(
         user_agent=request.headers.get("user-agent"),
     )
     _set_refresh_cookie(response, refresh)
-    return TokenResponse(access_token=access, usuario=service.perfil(usuario))
+    return TokenResponse(
+        access_token=access, refresh_token=refresh, usuario=service.perfil(usuario)
+    )
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -73,7 +75,9 @@ def login(
         user_agent=request.headers.get("user-agent"),
     )
     _set_refresh_cookie(response, refresh)
-    return TokenResponse(access_token=access, usuario=service.perfil(usuario))
+    return TokenResponse(
+        access_token=access, refresh_token=refresh, usuario=service.perfil(usuario)
+    )
 
 
 @router.post(
@@ -98,7 +102,9 @@ def login_con_google(
         user_agent=request.headers.get("user-agent"),
     )
     _set_refresh_cookie(response, refresh)
-    return TokenResponse(access_token=access, usuario=service.perfil(usuario))
+    return TokenResponse(
+        access_token=access, refresh_token=refresh, usuario=service.perfil(usuario)
+    )
 
 
 @router.post("/google/registro", response_model=TokenResponse, status_code=201)
@@ -116,23 +122,42 @@ def registro_con_google(
         user_agent=request.headers.get("user-agent"),
     )
     _set_refresh_cookie(response, refresh)
-    return TokenResponse(access_token=access, usuario=service.perfil(usuario))
+    return TokenResponse(
+        access_token=access, refresh_token=refresh, usuario=service.perfil(usuario)
+    )
 
 
 @router.post("/refresh", response_model=TokenResponse)
-def refrescar(request: Request, response: Response, db: Session = Depends(get_db)):
+def refrescar(
+    request: Request,
+    response: Response,
+    data: RefreshRequest | None = None,
+    db: Session = Depends(get_db),
+):
+    # La cookie no viaja de Vercel a Render. El token también va en el body.
     raw = request.cookies.get(settings.REFRESH_TOKEN_COOKIE_NAME)
-    if raw is None:
+    if not raw and data is not None:
+        raw = data.refresh_token
+    if not raw:
         raise UnauthorizedError("No hay sesión activa")
     service = AuthService(db)
     access, usuario, nuevo = service.refrescar_access_token(raw)
     _set_refresh_cookie(response, nuevo)
-    return TokenResponse(access_token=access, usuario=service.perfil(usuario))
+    return TokenResponse(
+        access_token=access, refresh_token=nuevo, usuario=service.perfil(usuario)
+    )
 
 
 @router.post("/logout", status_code=204)
-def logout(request: Request, response: Response, db: Session = Depends(get_db)):
+def logout(
+    request: Request,
+    response: Response,
+    data: RefreshRequest | None = None,
+    db: Session = Depends(get_db),
+):
     raw = request.cookies.get(settings.REFRESH_TOKEN_COOKIE_NAME)
+    if not raw and data is not None:
+        raw = data.refresh_token
     if raw:
         AuthService(db).cerrar_sesion(raw)
     _clear_refresh_cookie(response)

@@ -76,6 +76,19 @@ def test_registro_google_crea_cuenta_en_1000(db):
     assert {r.elo for r in perfil.ratings} == {1000}
 
 
+def test_refresh_rota_el_token_y_el_viejo_deja_de_servir(db, usuario_a):
+    service = AuthService(db)
+    _access, refresh = service.emitir_tokens(usuario_a, None, None)
+    _nuevo_access, usuario, nuevo = service.refrescar_access_token(refresh)
+    assert usuario.id == usuario_a.id
+    assert nuevo != refresh
+    try:
+        service.refrescar_access_token(refresh)
+        raise AssertionError("el token viejo debía dejar de servir")
+    except UnauthorizedError:
+        pass
+
+
 def test_google_correo_no_verificado(db, usuario_a):
     service = AuthService(db)
     claims = _claims()
