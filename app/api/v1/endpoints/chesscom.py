@@ -9,10 +9,24 @@ from app.core.exceptions import AppError
 from app.db.session import get_db
 from app.models.usuario import Usuario
 from app.repositories.cuenta_chesscom_repository import CuentaChesscomRepository
-from app.schemas.chesscom import ChesscomConectarOut, ChesscomEstadoOut
+from app.schemas.chesscom import ChesscomConectarOut, ChesscomEstadoOut, ChesscomVincularIn
 from app.services.chesscom_oauth_service import ChesscomOAuthService
 
 router = APIRouter(prefix="/chesscom", tags=["chesscom"])
+
+
+@router.post("/vincular", response_model=ChesscomEstadoOut)
+def vincular(
+    data: ChesscomVincularIn,
+    usuario: Usuario = Depends(get_current_usuario),
+    db: Session = Depends(get_db),
+):
+    cuenta = ChesscomOAuthService(db).vincular_por_username(usuario, data.username)
+    return ChesscomEstadoOut(
+        vinculada=True,
+        username=cuenta.username,
+        username_visible=cuenta.username_visible,
+    )
 
 
 @router.get("/conectar", response_model=ChesscomConectarOut)

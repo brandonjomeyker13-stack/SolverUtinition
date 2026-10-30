@@ -61,6 +61,37 @@ class ChesscomOAuthService:
         self.db.refresh(cuenta)
         return cuenta
 
+    def vincular_por_username(self, usuario: Usuario, username: str) -> CuentaChesscom:
+        """Vincula con la PubAPI: no hace falta el OAuth que Chess.com aún no entregó."""
+        if self.cuentas.get_by_usuario_id(usuario.id) is not None:
+            raise ConflictError("Esta cuenta ya está vinculada a Chess.com")
+
+        limpio = username.strip()
+        if not limpio:
+            raise ValidationError("Escribe el username de Chess.com")
+
+        perfil = self.cliente.perfil(limpio)
+        visible = str(perfil.get("username") or limpio)
+        clave = visible.lower()
+        ocupada = self.cuentas.get_by_username(clave)
+        if ocupada is not None:
+            raise ConflictError("Esa cuenta de Chess.com ya está vinculada a otro usuario")
+
+        uuid = perfil.get("player_id") or perfil.get("uuid")
+        cuenta = self.cuentas.create(
+            CuentaChesscom(
+                usuario_id=usuario.id,
+                username=clave,
+                username_visible=visible,
+                chesscom_uuid=str(uuid) if uuid else None,
+                vinculada_en=datetime.now(timezone.utc),
+            )
+        )
+        self.auth._asegurar_ratings(usuario.id)
+        self.db.commit()
+        self.db.refresh(cuenta)
+        return cuenta
+
     def desvincular(self, usuario: Usuario) -> None:
         cuenta = self.cuentas.get_by_usuario_id(usuario.id)
         if cuenta is None:

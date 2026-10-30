@@ -59,9 +59,10 @@ def ritmo_desde_api(time_class: str) -> Ritmo | None:
 
 class ChesscomClient:
     def __init__(self, timeout: float = 20.0):
-        headers = {"Accept": "application/json"}
-        if settings.CHESSCOM_USER_AGENT:
-            headers["User-Agent"] = settings.CHESSCOM_USER_AGENT
+        headers = {
+            "Accept": "application/json",
+            "User-Agent": settings.CHESSCOM_USER_AGENT or "SolverUnition (community ranking)",
+        }
         self._http = httpx.Client(timeout=timeout, headers=headers)
 
     def url_autorizacion(self, state: str, code_challenge: str) -> str:
