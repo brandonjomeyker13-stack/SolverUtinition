@@ -14,7 +14,10 @@ pip install -r requirements.txt -r requirements-dev.txt
 copy .env.example .env
 ```
 
-Rellena `.env` (qué va en cada variable está comentado ahí). Luego:
+Rellena `.env` (qué va en cada variable está comentado ahí).
+Para "Iniciar con Google" solo hace falta `GOOGLE_CLIENT_ID` (el mismo del front).
+
+Luego:
 
 ```bash
 alembic upgrade head

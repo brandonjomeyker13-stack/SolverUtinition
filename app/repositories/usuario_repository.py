@@ -12,3 +12,7 @@ class UsuarioRepository(BaseRepository[Usuario]):
     def get_by_email(self, email: str) -> Usuario | None:
         stmt = select(Usuario).where(Usuario.email == email.lower())
         return self.db.execute(stmt).scalar_one_or_none()
+
+    def get_by_google_sub(self, google_sub: str) -> Usuario | None:
+        stmt = select(Usuario).where(Usuario.google_sub == google_sub)
+        return self.db.execute(stmt).scalar_one_or_none()

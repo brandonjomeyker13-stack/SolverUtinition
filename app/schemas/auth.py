@@ -18,3 +18,8 @@ class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     usuario: PerfilOut
+
+
+class GoogleAuthRequest(BaseModel):
+    """`id_token` es el credential que entrega Google Identity Services en el front."""
+    id_token: str

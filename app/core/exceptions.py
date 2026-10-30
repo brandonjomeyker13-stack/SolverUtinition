@@ -11,6 +11,11 @@ class NotFoundError(AppError):
     """-> HTTP 404"""
 
 
+#: Entró con Google pero ese correo no tiene cuenta en la comunidad.
+#: El front debe mandarlo a registro, no tratarlo como "token malo".
+CUENTA_NO_REGISTRADA = "cuenta_no_registrada"
+
+
 class ConflictError(AppError):
     """-> HTTP 409"""
 

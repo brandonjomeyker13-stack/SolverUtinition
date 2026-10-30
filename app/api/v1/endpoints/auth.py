@@ -6,7 +6,7 @@ from app.core.deps import get_current_usuario
 from app.core.exceptions import UnauthorizedError
 from app.db.session import get_db
 from app.models.usuario import Usuario
-from app.schemas.auth import LoginRequest, RegistroRequest, TokenResponse
+from app.schemas.auth import GoogleAuthRequest, LoginRequest, RegistroRequest, TokenResponse
 from app.schemas.usuario import PerfilOut
 from app.services.auth_service import AuthService
 
@@ -52,6 +52,31 @@ def login(
 ):
     service = AuthService(db)
     usuario = service.autenticar(credentials)
+    access, refresh = service.emitir_tokens(
+        usuario,
+        ip=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+    )
+    _set_refresh_cookie(response, refresh)
+    return TokenResponse(access_token=access, usuario=service.perfil(usuario))
+
+
+@router.post(
+    "/google",
+    response_model=TokenResponse,
+    responses={
+        401: {"description": "Token de Google inválido o correo no verificado"},
+        404: {"description": "Ese correo de Google no tiene cuenta. Hay que registrarse primero."},
+    },
+)
+def login_con_google(
+    data: GoogleAuthRequest,
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+):
+    service = AuthService(db)
+    usuario = service.autenticar_con_google(data.id_token)
     access, refresh = service.emitir_tokens(
         usuario,
         ip=request.client.host if request.client else None,

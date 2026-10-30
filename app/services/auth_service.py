@@ -3,7 +3,8 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.exceptions import ConflictError, UnauthorizedError
+from app.core.exceptions import CUENTA_NO_REGISTRADA, ConflictError, NotFoundError, UnauthorizedError
+from app.core.google_auth import verificar_id_token_google
 from app.core.security import (
     create_access_token,
     generate_refresh_token,
@@ -54,6 +55,38 @@ class AuthService:
             raise UnauthorizedError("Credenciales inválidas")
         if not verify_password(credentials.password, usuario.password_hash):
             raise UnauthorizedError("Credenciales inválidas")
+        return usuario
+
+    def autenticar_con_google(self, id_token: str) -> Usuario:
+        claims = verificar_id_token_google(id_token)
+        email = (claims.get("email") or "").strip().lower()
+        sub = claims.get("sub")
+        if not email or not sub:
+            raise UnauthorizedError("Google no envió el correo de la cuenta")
+        if not claims.get("email_verified"):
+            raise UnauthorizedError("El correo de Google no está verificado")
+
+        por_sub = self.usuarios.get_by_google_sub(sub)
+        if por_sub is not None:
+            if not por_sub.activo:
+                raise UnauthorizedError("Usuario no válido")
+            return por_sub
+
+        usuario = self.usuarios.get_by_email(email)
+        if usuario is None:
+            raise NotFoundError(
+                "No hay una cuenta registrada con ese correo de Google. "
+                "Crea tu cuenta primero y después entra con Google.",
+                codigo=CUENTA_NO_REGISTRADA,
+            )
+        if not usuario.activo:
+            raise UnauthorizedError("Usuario no válido")
+        if usuario.google_sub and usuario.google_sub != sub:
+            raise UnauthorizedError("Ese correo ya está vinculado a otra cuenta de Google")
+
+        usuario.google_sub = sub
+        self.db.commit()
+        self.db.refresh(usuario)
         return usuario
 
     def emitir_tokens(self, usuario: Usuario, ip: str | None, user_agent: str | None) -> tuple[str, str]:

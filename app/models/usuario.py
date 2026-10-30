@@ -13,6 +13,7 @@ class Usuario(Base, TimestampMixin):
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     activo: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    google_sub: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True)
 
     cuenta_chesscom: Mapped["CuentaChesscom | None"] = relationship(
         back_populates="usuario", uselist=False

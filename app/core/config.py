@@ -43,6 +43,10 @@ class Settings(BaseSettings):
 
     CRON_SECRET: str | None = None
 
+    # Client ID de Google Identity Services (el del front). Sin esto,
+    # POST /auth/google rechaza todo.
+    GOOGLE_CLIENT_ID: str | None = None
+
     @property
     def cors_origins_list(self) -> list[str]:
         return [origen.strip() for origen in self.CORS_ORIGINS.split(",") if origen.strip()]
