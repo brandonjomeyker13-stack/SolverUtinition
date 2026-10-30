@@ -28,7 +28,7 @@ class Settings(BaseSettings):
 
     FRONTEND_URL: str = "http://localhost:5173"
     CORS_ORIGINS: str = "http://localhost:5173,http://localhost:3000"
-    CORS_ORIGIN_REGEX: str | None = None
+    CORS_ORIGIN_REGEX: str | None = r"https://.*\.vercel\.app"
 
     ELO_INICIAL: int = 1000
     ELO_K: int = 20
@@ -49,7 +49,16 @@ class Settings(BaseSettings):
 
     @property
     def cors_origins_list(self) -> list[str]:
-        return [origen.strip() for origen in self.CORS_ORIGINS.split(",") if origen.strip()]
+        origenes = [origen.strip() for origen in self.CORS_ORIGINS.split(",") if origen.strip()]
+        for extra in ("http://localhost:5173", "http://localhost:3000"):
+            if extra not in origenes:
+                origenes.append(extra)
+        return origenes
+
+    @property
+    def cors_origin_regex(self) -> str | None:
+        raw = (self.CORS_ORIGIN_REGEX or "").strip()
+        return raw or r"https://.*\.vercel\.app"
 
     @property
     def is_production(self) -> bool:

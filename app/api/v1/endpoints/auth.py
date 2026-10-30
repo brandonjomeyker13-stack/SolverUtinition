@@ -13,15 +13,30 @@ from app.services.auth_service import AuthService
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
+def _cookie_samesite() -> str:
+    # Front en Vercel/localhost y API en Render son sitios distintos:
+    # Lax no manda la cookie en fetch. None exige Secure, solo en production.
+    return "none" if settings.is_production else "lax"
+
+
 def _set_refresh_cookie(response: Response, raw_refresh_token: str) -> None:
     response.set_cookie(
         key=settings.REFRESH_TOKEN_COOKIE_NAME,
         value=raw_refresh_token,
         httponly=True,
         secure=settings.is_production,
-        samesite="lax",
+        samesite=_cookie_samesite(),
         max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
         path="/api/v1/auth",
+    )
+
+
+def _clear_refresh_cookie(response: Response) -> None:
+    response.delete_cookie(
+        key=settings.REFRESH_TOKEN_COOKIE_NAME,
+        path="/api/v1/auth",
+        secure=settings.is_production,
+        samesite=_cookie_samesite(),
     )
 
 
@@ -102,7 +117,7 @@ def logout(request: Request, response: Response, db: Session = Depends(get_db)):
     raw = request.cookies.get(settings.REFRESH_TOKEN_COOKIE_NAME)
     if raw:
         AuthService(db).cerrar_sesion(raw)
-    response.delete_cookie(settings.REFRESH_TOKEN_COOKIE_NAME, path="/api/v1/auth")
+    _clear_refresh_cookie(response)
 
 
 @router.get("/me", response_model=PerfilOut)
