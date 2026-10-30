@@ -26,8 +26,13 @@ class Settings(BaseSettings):
     REFRESH_TOKEN_EXPIRE_DAYS: int = 30
     REFRESH_TOKEN_COOKIE_NAME: str = "refresh_token"
 
-    FRONTEND_URL: str = "http://localhost:5173"
-    CORS_ORIGINS: str = "http://localhost:5173,http://localhost:3000"
+    FRONTEND_URL: str = "https://solucionador-de-uso-front.vercel.app"
+    CORS_ORIGINS: str = (
+        "http://localhost:5173,http://localhost:3000,"
+        "https://solucionador-de-uso-front.vercel.app,"
+        "https://solucionador-utinicion-front-2ftujmjqc-orderscode.vercel.app,"
+        "https://solucionador-utinición-front-2ftujmjqc-orderscode.vercel.app"
+    )
     CORS_ORIGIN_REGEX: str | None = r"https://.*\.vercel\.app"
 
     ELO_INICIAL: int = 1000
@@ -50,7 +55,13 @@ class Settings(BaseSettings):
     @property
     def cors_origins_list(self) -> list[str]:
         origenes = [origen.strip() for origen in self.CORS_ORIGINS.split(",") if origen.strip()]
-        for extra in ("http://localhost:5173", "http://localhost:3000"):
+        for extra in (
+            "http://localhost:5173",
+            "http://localhost:3000",
+            "https://solucionador-de-uso-front.vercel.app",
+            "https://solucionador-utinicion-front-2ftujmjqc-orderscode.vercel.app",
+            "https://solucionador-utinición-front-2ftujmjqc-orderscode.vercel.app",
+        ):
             if extra not in origenes:
                 origenes.append(extra)
         return origenes
