@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     REFRESH_TOKEN_EXPIRE_DAYS: int = 60
     REFRESH_TOKEN_COOKIE_NAME: str = "refresh_token"
 
-    FRONTEND_URL: str = "https://solucionador-de-uso-front.vercel.app"
+    FRONTEND_URL: str = "https://solver-utinition-front.vercel.app"
     CORS_ORIGINS: str = (
         "http://localhost:5173,http://localhost:3000,"
         "https://solucionador-de-uso-front.vercel.app,"
@@ -47,9 +47,8 @@ class Settings(BaseSettings):
     CHESSCOM_TOKEN_URL: str = "https://oauth.chess.com/token"
     CHESSCOM_PUBAPI_URL: str = "https://api.chess.com/pub"
 
-    # OAuth de Lichess: lo creas tú en lichess.org/account/oauth/app.
-    # No hay revisión de Lichess. Sin client id, "Conectar Lichess" responde 422.
-    # Cada app guarda un solo redirect URI. Local y Render suelen ser dos apps.
+    # OAuth público de Lichess: no hay alta de app ni client secret.
+    # El client id es un texto único que eliges tú. Sin él, "Conectar Lichess" responde 422.
     LICHESS_CLIENT_ID: str | None = None
     LICHESS_REDIRECT_URI: str = "http://localhost:8000/api/v1/lichess/callback"
     LICHESS_USER_AGENT: str | None = None
@@ -104,15 +103,22 @@ class Settings(BaseSettings):
 
     @property
     def lichess_oauth_listo(self) -> bool:
-        return bool((self.LICHESS_CLIENT_ID or "").strip())
+        return bool(self.lichess_client_id)
+
+    @property
+    def lichess_client_id(self) -> str:
+        return (self.LICHESS_CLIENT_ID or "").strip()
+
+    @property
+    def lichess_redirect_uri(self) -> str:
+        return (self.LICHESS_REDIRECT_URI or "").strip()
 
     @property
     def lichess_user_agent(self) -> str:
-        return (
-            self.LICHESS_USER_AGENT
-            or self.CHESSCOM_USER_AGENT
-            or "SolverUnition (community ranking)"
-        )
+        bruto = self.LICHESS_USER_AGENT or self.CHESSCOM_USER_AGENT or "SolverUnition (community ranking)"
+        # Render a veces guarda la variable con un salto de línea. Un header no lo admite.
+        limpio = " ".join(bruto.split())
+        return limpio or "SolverUnition (community ranking)"
 
 
 @lru_cache

@@ -17,9 +17,9 @@ copy .env.example .env
 
 Rellena `.env` (qué va en cada variable está comentado ahí).
 Para "Iniciar con Google" solo hace falta `GOOGLE_CLIENT_ID` (el mismo del front).
-Para "Conectar Lichess" hace falta `LICHESS_CLIENT_ID`: se crea en un minuto en
-https://lichess.org/account/oauth/app/create (no hay que esperar aprobación).
-El redirect tiene que ser exactamente `LICHESS_REDIRECT_URI`.
+Para "Conectar Lichess" hace falta `LICHESS_CLIENT_ID`: un identificador único
+que eliges tú (Lichess ya no pide registrar la app). En Render, el redirect
+tiene que ser la URL pública de `LICHESS_REDIRECT_URI`.
 
 Luego:
 

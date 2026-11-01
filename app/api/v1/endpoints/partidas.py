@@ -32,10 +32,11 @@ def mias(
 
 @router.post("/sincronizar-ahora", response_model=SincronizacionOut)
 def sincronizar_ahora(
-    _: Usuario = Depends(get_current_usuario),
+    usuario: Usuario = Depends(get_current_usuario),
     db: Session = Depends(get_db),
 ) -> SincronizacionOut:
-    return _correr(db)
+    resultado = SincronizacionLichessService(db).sincronizar_usuario(usuario.id)
+    return SincronizacionOut(**resultado)
 
 
 @router.post("/sincronizar", response_model=SincronizacionOut)

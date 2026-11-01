@@ -25,8 +25,7 @@ class LichessOAuthService:
     def url_de_conexion(self, usuario: Usuario) -> str:
         if not settings.lichess_oauth_listo:
             raise ValidationError(
-                "Falta LICHESS_CLIENT_ID. Créalo en lichess.org/account/oauth/app "
-                "y pon el redirect de esta API."
+                "Falta LICHESS_CLIENT_ID. Elige un identificador único y ponlo en el entorno."
             )
         self._exigir_puede_vincular(usuario.id)
         verifier, challenge = generar_pkce()

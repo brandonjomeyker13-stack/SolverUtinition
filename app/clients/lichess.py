@@ -30,8 +30,8 @@ class LichessClient:
     def url_autorizacion(self, state: str, code_challenge: str) -> str:
         params = {
             "response_type": "code",
-            "client_id": settings.LICHESS_CLIENT_ID,
-            "redirect_uri": settings.LICHESS_REDIRECT_URI,
+            "client_id": settings.lichess_client_id,
+            "redirect_uri": settings.lichess_redirect_uri,
             "code_challenge_method": "S256",
             "code_challenge": code_challenge,
             "state": state,
@@ -46,8 +46,8 @@ class LichessClient:
                     "grant_type": "authorization_code",
                     "code": code,
                     "code_verifier": code_verifier,
-                    "redirect_uri": settings.LICHESS_REDIRECT_URI,
-                    "client_id": settings.LICHESS_CLIENT_ID,
+                    "redirect_uri": settings.lichess_redirect_uri,
+                    "client_id": settings.lichess_client_id,
                 },
             )
         except httpx.HTTPError as exc:
@@ -77,45 +77,21 @@ class LichessClient:
         except httpx.HTTPError:
             logger.warning("No se pudo revocar el token de Lichess")
 
-    def partidas(self, username: str, since_ms: int) -> list[dict[str, Any]]:
-        """Partidas terminadas desde `since_ms`, de más nuevas a más viejas."""
-        vistos: set[str] = set()
-        juegos: list[dict[str, Any]] = []
-        until: int | None = None
-        for _ in range(5):
-            params: dict[str, Any] = {
+    def partidas(self, username: str, since_ms: int, limite: int = 50) -> list[dict[str, Any]]:
+        """Las partidas más recientes desde `since_ms`. Una sola petición."""
+        return self._ndjson(
+            username,
+            {
                 "since": since_ms,
-                "max": 200,
+                "max": max(1, min(limite, 50)),
                 "perfType": "bullet,blitz,rapid",
                 "moves": "false",
                 "pgnInJson": "false",
                 "clocks": "false",
                 "evals": "false",
                 "opening": "false",
-            }
-            if until is not None:
-                params["until"] = until
-            lote = self._ndjson(username, params)
-            if not lote:
-                break
-            nuevos = 0
-            oldest: int | None = None
-            for game in lote:
-                gid = str(game.get("id") or "")
-                if gid and gid not in vistos:
-                    vistos.add(gid)
-                    juegos.append(game)
-                    nuevos += 1
-                marca = game.get("lastMoveAt")
-                if isinstance(marca, int) and (oldest is None or marca < oldest):
-                    oldest = marca
-            if nuevos == 0 or len(lote) < 200 or oldest is None:
-                break
-            siguiente = oldest - 1
-            if until is not None and siguiente >= until:
-                break
-            until = siguiente
-        return juegos
+            },
+        )
 
     def _ndjson(self, username: str, params: dict[str, Any]) -> list[dict[str, Any]]:
         url = f"{settings.LICHESS_API_URL}/api/games/user/{quote(username, safe='')}"

@@ -1,3 +1,4 @@
+from collections.abc import Iterable
 from datetime import datetime, timezone
 from typing import Any
 
@@ -104,12 +105,27 @@ class SincronizacionLichessService:
 
     def sincronizar(self) -> dict[str, int]:
         cuentas = {c.username: c for c in self.cuentas.listar_todas()}
+        return self._sincronizar_cuentas(cuentas, cuentas.values())
+
+    def sincronizar_usuario(self, usuario_id: int) -> dict[str, int]:
+        """Solo las partidas recientes de esta persona. Una petición a Lichess."""
+        todas = {c.username: c for c in self.cuentas.listar_todas()}
+        mia = next((c for c in todas.values() if c.usuario_id == usuario_id), None)
+        if mia is None or len(todas) < 2:
+            return {"revisadas": 0, "aplicadas": 0, "omitidas": 0}
+        return self._sincronizar_cuentas(todas, [mia])
+
+    def _sincronizar_cuentas(
+        self,
+        cuentas: dict[str, CuentaLichess],
+        consultar: Iterable[CuentaLichess],
+    ) -> dict[str, int]:
         if len(cuentas) < 2:
             return {"revisadas": 0, "aplicadas": 0, "omitidas": 0}
 
         crudas: list[dict[str, Any]] = []
         vistos: set[str] = set()
-        for cuenta in cuentas.values():
+        for cuenta in consultar:
             desde = cuenta.vinculada_en
             if desde.tzinfo is None:
                 desde = desde.replace(tzinfo=timezone.utc)
