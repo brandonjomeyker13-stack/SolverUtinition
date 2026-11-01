@@ -1,9 +1,10 @@
 # SolverUnition API
 
-Backend de la comunidad de ajedrez: cuenta propia, vínculo con Chess.com y
-ranking interno por ritmo (bullet, blitz, rapid). Las partidas se juegan en
-Chess.com; acá solo se anotan las que ocurran **después** de que ambos
-jugadores ya estén vinculados.
+Backend de la comunidad de ajedrez: cuenta propia y ranking interno por ritmo
+(bullet, blitz, rapid). Cada jugador vincula **una** plataforma, Lichess o
+Chess.com. Hoy la web conecta Lichess; Chess.com sigue en la API, oculto en
+el front, hasta que aprueben su OAuth. Solo cuentan las partidas de **después**
+de que ambos jugadores ya estén vinculados.
 
 ## Puesta en marcha
 
@@ -16,6 +17,9 @@ copy .env.example .env
 
 Rellena `.env` (qué va en cada variable está comentado ahí).
 Para "Iniciar con Google" solo hace falta `GOOGLE_CLIENT_ID` (el mismo del front).
+Para "Conectar Lichess" hace falta `LICHESS_CLIENT_ID`: se crea en un minuto en
+https://lichess.org/account/oauth/app/create (no hay que esperar aprobación).
+El redirect tiene que ser exactamente `LICHESS_REDIRECT_URI`.
 
 Luego:
 
@@ -43,7 +47,7 @@ app/
   repositories/       Acceso a datos
   models/             Tablas
   schemas/            Contratos Pydantic
-  clients/            Chess.com (OAuth + PubAPI)
+  clients/            Chess.com y Lichess
   core/               Config, CORS, JWT, elo
 ```
 

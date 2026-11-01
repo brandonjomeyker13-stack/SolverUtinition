@@ -12,6 +12,7 @@ router = APIRouter(prefix="/ranking", tags=["ranking"])
 @router.get("", response_model=list[RankingFilaOut])
 def listar(
     ritmo: Ritmo = Query(default=Ritmo.RAPID),
+    limit: int = Query(default=100, ge=1, le=200),
     db: Session = Depends(get_db),
-):
-    return RankingService(db).listar(ritmo)
+) -> list[RankingFilaOut]:
+    return RankingService(db).listar(ritmo, limit)

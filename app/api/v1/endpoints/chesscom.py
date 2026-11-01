@@ -1,6 +1,7 @@
+import logging
+
 from fastapi import APIRouter, Depends
-from fastapi.responses import RedirectResponse
-from jose import JWTError
+from fastapi.responses import RedirectResponse, Response
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -8,64 +9,60 @@ from app.core.deps import get_current_usuario
 from app.core.exceptions import AppError
 from app.db.session import get_db
 from app.models.usuario import Usuario
-from app.repositories.cuenta_chesscom_repository import CuentaChesscomRepository
-from app.schemas.chesscom import ChesscomConectarOut, ChesscomEstadoOut, ChesscomVincularIn
+from app.schemas.chesscom import ChesscomConectarOut, ChesscomVincularIn
+from app.schemas.usuario import CuentaChesscomOut
 from app.services.chesscom_oauth_service import ChesscomOAuthService
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/chesscom", tags=["chesscom"])
 
 
-@router.post("/vincular", response_model=ChesscomEstadoOut)
-def vincular(
-    data: ChesscomVincularIn,
-    usuario: Usuario = Depends(get_current_usuario),
-    db: Session = Depends(get_db),
-):
-    cuenta = ChesscomOAuthService(db).vincular_por_username(usuario, data.username)
-    return ChesscomEstadoOut(
-        vinculada=True,
-        username=cuenta.username,
-        username_visible=cuenta.username_visible,
-    )
+def _volver(marca: str) -> RedirectResponse:
+    base = settings.FRONTEND_URL.rstrip("/")
+    return RedirectResponse(url=f"{base}/cuenta?chesscom={marca}", status_code=302)
 
 
 @router.get("/conectar", response_model=ChesscomConectarOut)
 def conectar(
     usuario: Usuario = Depends(get_current_usuario),
     db: Session = Depends(get_db),
-):
-    url = ChesscomOAuthService(db).url_de_conexion(usuario)
-    return ChesscomConectarOut(url=url)
+) -> ChesscomConectarOut:
+    return ChesscomConectarOut(url=ChesscomOAuthService(db).url_de_conexion(usuario))
 
 
 @router.get("/callback")
-def callback(code: str, state: str, db: Session = Depends(get_db)):
-    destino = settings.FRONTEND_URL.rstrip("/")
+def callback(
+    code: str | None = None,
+    state: str | None = None,
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    if not code or not state:
+        return _volver("error")
     try:
         ChesscomOAuthService(db).completar(code, state)
-    except (JWTError, AppError, ValueError, KeyError):
-        return RedirectResponse(f"{destino}/cuenta?chesscom=error")
-    return RedirectResponse(f"{destino}/cuenta?chesscom=ok")
+    except AppError as exc:
+        logger.info("No se pudo vincular Chess.com: %s", exc.message)
+        return _volver("error")
+    except Exception:
+        logger.exception("Fallo al vincular Chess.com")
+        return _volver("error")
+    return _volver("ok")
 
 
-@router.get("/estado", response_model=ChesscomEstadoOut)
-def estado(
+@router.post("/vincular", response_model=CuentaChesscomOut)
+def vincular(
+    body: ChesscomVincularIn,
     usuario: Usuario = Depends(get_current_usuario),
     db: Session = Depends(get_db),
-):
-    cuenta = CuentaChesscomRepository(db).get_by_usuario_id(usuario.id)
-    if cuenta is None:
-        return ChesscomEstadoOut(vinculada=False)
-    return ChesscomEstadoOut(
-        vinculada=True,
-        username=cuenta.username,
-        username_visible=cuenta.username_visible,
-    )
+) -> CuentaChesscomOut:
+    cuenta = ChesscomOAuthService(db).vincular_por_username(usuario, body.username)
+    return CuentaChesscomOut.model_validate(cuenta)
 
 
 @router.delete("", status_code=204)
 def desvincular(
     usuario: Usuario = Depends(get_current_usuario),
     db: Session = Depends(get_db),
-):
+) -> Response:
     ChesscomOAuthService(db).desvincular(usuario)
+    return Response(status_code=204)

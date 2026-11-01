@@ -9,6 +9,7 @@ from app.core.security import firmar_oauth_state, leer_oauth_state
 from app.models.cuenta_chesscom import CuentaChesscom
 from app.models.usuario import Usuario
 from app.repositories.cuenta_chesscom_repository import CuentaChesscomRepository
+from app.repositories.cuenta_lichess_repository import CuentaLichessRepository
 from app.services.auth_service import AuthService
 
 
@@ -16,6 +17,7 @@ class ChesscomOAuthService:
     def __init__(self, db: Session, cliente: ChesscomClient | None = None):
         self.db = db
         self.cuentas = CuentaChesscomRepository(db)
+        self.lichess = CuentaLichessRepository(db)
         self.auth = AuthService(db)
         self.cliente = cliente or ChesscomClient()
 
@@ -24,8 +26,7 @@ class ChesscomOAuthService:
             raise ValidationError(
                 "Falta CHESSCOM_CLIENT_ID o CHESSCOM_CLIENT_SECRET en el entorno"
             )
-        if self.cuentas.get_by_usuario_id(usuario.id) is not None:
-            raise ConflictError("Esta cuenta ya está vinculada a Chess.com")
+        self._exigir_puede_vincular(usuario.id)
 
         verifier, challenge = generar_pkce()
         state = firmar_oauth_state({"uid": usuario.id, "cv": verifier})
@@ -36,8 +37,7 @@ class ChesscomOAuthService:
         usuario_id = int(claims["uid"])
         verifier = claims["cv"]
 
-        if self.cuentas.get_by_usuario_id(usuario_id) is not None:
-            raise ConflictError("Esta cuenta ya está vinculada a Chess.com")
+        self._exigir_puede_vincular(usuario_id)
 
         tokens = self.cliente.intercambiar_codigo(code, verifier)
         username_visible, uuid = username_desde_tokens(tokens, self.cliente)
@@ -63,8 +63,7 @@ class ChesscomOAuthService:
 
     def vincular_por_username(self, usuario: Usuario, username: str) -> CuentaChesscom:
         """Vincula con la PubAPI: no hace falta el OAuth que Chess.com aún no entregó."""
-        if self.cuentas.get_by_usuario_id(usuario.id) is not None:
-            raise ConflictError("Esta cuenta ya está vinculada a Chess.com")
+        self._exigir_puede_vincular(usuario.id)
 
         limpio = username.strip()
         if not limpio:
@@ -91,6 +90,14 @@ class ChesscomOAuthService:
         self.db.commit()
         self.db.refresh(cuenta)
         return cuenta
+
+    def _exigir_puede_vincular(self, usuario_id: int) -> None:
+        if self.cuentas.get_by_usuario_id(usuario_id) is not None:
+            raise ConflictError("Esta cuenta ya está vinculada a Chess.com")
+        if self.lichess.get_by_usuario_id(usuario_id) is not None:
+            raise ConflictError(
+                "Esta cuenta ya está vinculada a Lichess. Un jugador usa una sola plataforma."
+            )
 
     def desvincular(self, usuario: Usuario) -> None:
         cuenta = self.cuentas.get_by_usuario_id(usuario.id)

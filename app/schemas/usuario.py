@@ -37,6 +37,15 @@ class CuentaChesscomOut(BaseModel):
     vinculada_en: datetime
 
 
+class CuentaLichessOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    username: str
+    username_visible: str
+    vinculada_en: datetime
+
+
 class PerfilOut(UsuarioOut):
     chesscom: CuentaChesscomOut | None = None
+    lichess: CuentaLichessOut | None = None
     ratings: list[RatingOut] = []

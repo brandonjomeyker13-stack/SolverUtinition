@@ -9,6 +9,7 @@ class Ritmo(StrEnum):
 
 class Plataforma(StrEnum):
     CHESSCOM = "chesscom"
+    LICHESS = "lichess"
 
 
 class ResultadoPartida(StrEnum):

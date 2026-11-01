@@ -18,11 +18,12 @@ from app.models.rating import Rating
 from app.models.refresh_token import RefreshToken
 from app.models.usuario import Usuario
 from app.repositories.cuenta_chesscom_repository import CuentaChesscomRepository
+from app.repositories.cuenta_lichess_repository import CuentaLichessRepository
 from app.repositories.rating_repository import RatingRepository
 from app.repositories.refresh_token_repository import RefreshTokenRepository
 from app.repositories.usuario_repository import UsuarioRepository
 from app.schemas.auth import LoginRequest, RegistroRequest
-from app.schemas.usuario import CuentaChesscomOut, PerfilOut, RatingOut
+from app.schemas.usuario import CuentaChesscomOut, CuentaLichessOut, PerfilOut, RatingOut
 
 
 class AuthService:
@@ -31,6 +32,7 @@ class AuthService:
         self.usuarios = UsuarioRepository(db)
         self.refresh = RefreshTokenRepository(db)
         self.cuentas = CuentaChesscomRepository(db)
+        self.lichess = CuentaLichessRepository(db)
         self.ratings = RatingRepository(db)
 
     def registrar(self, data: RegistroRequest) -> Usuario:
@@ -153,6 +155,7 @@ class AuthService:
 
     def perfil(self, usuario: Usuario) -> PerfilOut:
         cuenta = self.cuentas.get_by_usuario_id(usuario.id)
+        lichess = self.lichess.get_by_usuario_id(usuario.id)
         ratings = self.ratings.listar_de_usuario(usuario.id)
         return PerfilOut(
             id=usuario.id,
@@ -162,6 +165,7 @@ class AuthService:
             created_at=usuario.created_at,
             updated_at=usuario.updated_at,
             chesscom=CuentaChesscomOut.model_validate(cuenta) if cuenta else None,
+            lichess=CuentaLichessOut.model_validate(lichess) if lichess else None,
             ratings=[RatingOut.model_validate(r) for r in ratings],
         )
 

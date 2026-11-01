@@ -47,6 +47,16 @@ class Settings(BaseSettings):
     CHESSCOM_TOKEN_URL: str = "https://oauth.chess.com/token"
     CHESSCOM_PUBAPI_URL: str = "https://api.chess.com/pub"
 
+    # OAuth de Lichess: lo creas tú en lichess.org/account/oauth/app.
+    # No hay revisión de Lichess. Sin client id, "Conectar Lichess" responde 422.
+    # Cada app guarda un solo redirect URI. Local y Render suelen ser dos apps.
+    LICHESS_CLIENT_ID: str | None = None
+    LICHESS_REDIRECT_URI: str = "http://localhost:8000/api/v1/lichess/callback"
+    LICHESS_USER_AGENT: str | None = None
+    LICHESS_AUTH_URL: str = "https://lichess.org/oauth"
+    LICHESS_TOKEN_URL: str = "https://lichess.org/api/token"
+    LICHESS_API_URL: str = "https://lichess.org"
+
     CRON_SECRET: str | None = None
 
     # Client ID de Google Identity Services (el del front). Sin esto,
@@ -91,6 +101,18 @@ class Settings(BaseSettings):
     @property
     def chesscom_oauth_listo(self) -> bool:
         return bool(self.CHESSCOM_CLIENT_ID and self.CHESSCOM_CLIENT_SECRET)
+
+    @property
+    def lichess_oauth_listo(self) -> bool:
+        return bool((self.LICHESS_CLIENT_ID or "").strip())
+
+    @property
+    def lichess_user_agent(self) -> str:
+        return (
+            self.LICHESS_USER_AGENT
+            or self.CHESSCOM_USER_AGENT
+            or "SolverUnition (community ranking)"
+        )
 
 
 @lru_cache

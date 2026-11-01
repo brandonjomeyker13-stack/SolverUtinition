@@ -89,6 +89,17 @@ def test_refresh_rota_el_token_y_el_viejo_deja_de_servir(db, usuario_a):
         pass
 
 
+def test_cerrar_sesion_invalida_el_refresh(db, usuario_a):
+    service = AuthService(db)
+    _access, refresh = service.emitir_tokens(usuario_a, None, None)
+    service.cerrar_sesion(refresh)
+    try:
+        service.refrescar_access_token(refresh)
+        raise AssertionError("la sesión debía quedar cerrada")
+    except UnauthorizedError:
+        pass
+
+
 def test_google_correo_no_verificado(db, usuario_a):
     service = AuthService(db)
     claims = _claims()

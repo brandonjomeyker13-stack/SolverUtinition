@@ -1,168 +1,84 @@
 from fastapi import APIRouter, Depends, Request, Response
 from sqlalchemy.orm import Session
 
-from app.core.config import settings
-from app.core.deps import get_current_usuario
-from app.core.exceptions import UnauthorizedError
 from app.db.session import get_db
 from app.models.usuario import Usuario
 from app.schemas.auth import GoogleAuthRequest, LoginRequest, RefreshRequest, RegistroRequest, TokenResponse
 from app.schemas.usuario import PerfilOut
 from app.services.auth_service import AuthService
+from app.core.deps import get_current_usuario
+
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
-def _cookie_samesite() -> str:
-    # Front en Vercel/localhost y API en Render son sitios distintos:
-    # Lax no manda la cookie en fetch. None exige Secure, solo en production.
-    return "none" if settings.is_production else "lax"
+def _cliente(request: Request) -> tuple[str | None, str | None]:
+    forwarded = request.headers.get("x-forwarded-for")
+    ip = forwarded.split(",")[0].strip() if forwarded else None
+    if not ip and request.client:
+        ip = request.client.host
+    agente = request.headers.get("user-agent")
+    return (ip[:45] if ip else None), (agente[:255] if agente else None)
 
 
-def _set_refresh_cookie(response: Response, raw_refresh_token: str) -> None:
-    response.set_cookie(
-        key=settings.REFRESH_TOKEN_COOKIE_NAME,
-        value=raw_refresh_token,
-        httponly=True,
-        secure=settings.is_production,
-        samesite=_cookie_samesite(),
-        max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
-        path="/api/v1/auth",
+def _emitir(service: AuthService, usuario: Usuario, request: Request) -> TokenResponse:
+    ip, agente = _cliente(request)
+    access, refresh = service.emitir_tokens(usuario, ip, agente)
+    return TokenResponse(
+        access_token=access,
+        refresh_token=refresh,
+        usuario=service.perfil(usuario),
     )
 
 
-def _clear_refresh_cookie(response: Response) -> None:
-    response.delete_cookie(
-        key=settings.REFRESH_TOKEN_COOKIE_NAME,
-        path="/api/v1/auth",
-        secure=settings.is_production,
-        samesite=_cookie_samesite(),
-    )
-
-
-@router.post("/registro", response_model=TokenResponse, status_code=201)
-def registrar(
-    data: RegistroRequest,
-    request: Request,
-    response: Response,
-    db: Session = Depends(get_db),
-):
+@router.post("/registro", response_model=TokenResponse)
+def registro(data: RegistroRequest, request: Request, db: Session = Depends(get_db)) -> TokenResponse:
     service = AuthService(db)
     usuario = service.registrar(data)
-    access, refresh = service.emitir_tokens(
-        usuario,
-        ip=request.client.host if request.client else None,
-        user_agent=request.headers.get("user-agent"),
-    )
-    _set_refresh_cookie(response, refresh)
-    return TokenResponse(
-        access_token=access, refresh_token=refresh, usuario=service.perfil(usuario)
-    )
+    return _emitir(service, usuario, request)
 
 
 @router.post("/login", response_model=TokenResponse)
-def login(
-    credentials: LoginRequest,
-    request: Request,
-    response: Response,
-    db: Session = Depends(get_db),
-):
+def login(data: LoginRequest, request: Request, db: Session = Depends(get_db)) -> TokenResponse:
     service = AuthService(db)
-    usuario = service.autenticar(credentials)
-    access, refresh = service.emitir_tokens(
-        usuario,
-        ip=request.client.host if request.client else None,
-        user_agent=request.headers.get("user-agent"),
-    )
-    _set_refresh_cookie(response, refresh)
-    return TokenResponse(
-        access_token=access, refresh_token=refresh, usuario=service.perfil(usuario)
-    )
+    usuario = service.autenticar(data)
+    return _emitir(service, usuario, request)
 
 
-@router.post(
-    "/google",
-    response_model=TokenResponse,
-    responses={
-        401: {"description": "Token de Google inválido o correo no verificado"},
-        404: {"description": "Ese correo de Google no tiene cuenta. Hay que registrarse primero."},
-    },
-)
-def login_con_google(
-    data: GoogleAuthRequest,
-    request: Request,
-    response: Response,
-    db: Session = Depends(get_db),
-):
+@router.post("/google", response_model=TokenResponse)
+def google(data: GoogleAuthRequest, request: Request, db: Session = Depends(get_db)) -> TokenResponse:
     service = AuthService(db)
     usuario = service.autenticar_con_google(data.id_token)
-    access, refresh = service.emitir_tokens(
-        usuario,
-        ip=request.client.host if request.client else None,
-        user_agent=request.headers.get("user-agent"),
-    )
-    _set_refresh_cookie(response, refresh)
-    return TokenResponse(
-        access_token=access, refresh_token=refresh, usuario=service.perfil(usuario)
-    )
+    return _emitir(service, usuario, request)
 
 
-@router.post("/google/registro", response_model=TokenResponse, status_code=201)
-def registro_con_google(
-    data: GoogleAuthRequest,
-    request: Request,
-    response: Response,
-    db: Session = Depends(get_db),
-):
+@router.post("/google/registro", response_model=TokenResponse)
+def google_registro(
+    data: GoogleAuthRequest, request: Request, db: Session = Depends(get_db)
+) -> TokenResponse:
     service = AuthService(db)
     usuario = service.registrar_con_google(data.id_token)
-    access, refresh = service.emitir_tokens(
-        usuario,
-        ip=request.client.host if request.client else None,
-        user_agent=request.headers.get("user-agent"),
-    )
-    _set_refresh_cookie(response, refresh)
-    return TokenResponse(
-        access_token=access, refresh_token=refresh, usuario=service.perfil(usuario)
-    )
+    return _emitir(service, usuario, request)
 
 
 @router.post("/refresh", response_model=TokenResponse)
-def refrescar(
-    request: Request,
-    response: Response,
-    data: RefreshRequest | None = None,
-    db: Session = Depends(get_db),
-):
-    # La cookie no viaja de Vercel a Render. El token también va en el body.
-    raw = request.cookies.get(settings.REFRESH_TOKEN_COOKIE_NAME)
-    if not raw and data is not None:
-        raw = data.refresh_token
-    if not raw:
-        raise UnauthorizedError("No hay sesión activa")
+def refresh(data: RefreshRequest, db: Session = Depends(get_db)) -> TokenResponse:
     service = AuthService(db)
-    access, usuario, nuevo = service.refrescar_access_token(raw)
-    _set_refresh_cookie(response, nuevo)
+    access, usuario, nuevo = service.refrescar_access_token(data.refresh_token or "")
     return TokenResponse(
-        access_token=access, refresh_token=nuevo, usuario=service.perfil(usuario)
+        access_token=access,
+        refresh_token=nuevo,
+        usuario=service.perfil(usuario),
     )
 
 
 @router.post("/logout", status_code=204)
-def logout(
-    request: Request,
-    response: Response,
-    data: RefreshRequest | None = None,
-    db: Session = Depends(get_db),
-):
-    raw = request.cookies.get(settings.REFRESH_TOKEN_COOKIE_NAME)
-    if not raw and data is not None:
-        raw = data.refresh_token
-    if raw:
-        AuthService(db).cerrar_sesion(raw)
-    _clear_refresh_cookie(response)
+def logout(data: RefreshRequest, db: Session = Depends(get_db)) -> Response:
+    if data.refresh_token:
+        AuthService(db).cerrar_sesion(data.refresh_token)
+    return Response(status_code=204)
 
 
 @router.get("/me", response_model=PerfilOut)
-def yo(usuario: Usuario = Depends(get_current_usuario), db: Session = Depends(get_db)):
+def me(usuario: Usuario = Depends(get_current_usuario), db: Session = Depends(get_db)) -> PerfilOut:
     return AuthService(db).perfil(usuario)

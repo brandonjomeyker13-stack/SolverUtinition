@@ -18,4 +18,7 @@ class Usuario(Base, TimestampMixin):
     cuenta_chesscom: Mapped["CuentaChesscom | None"] = relationship(
         back_populates="usuario", uselist=False
     )
+    cuenta_lichess: Mapped["CuentaLichess | None"] = relationship(
+        back_populates="usuario", uselist=False
+    )
     ratings: Mapped[list["Rating"]] = relationship(back_populates="usuario")
