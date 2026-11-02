@@ -1,5 +1,7 @@
 from datetime import datetime, timezone
+from typing import Any
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.clients.chesscom import generar_pkce
@@ -12,6 +14,28 @@ from app.models.usuario import Usuario
 from app.repositories.cuenta_chesscom_repository import CuentaChesscomRepository
 from app.repositories.cuenta_lichess_repository import CuentaLichessRepository
 from app.services.auth_service import AuthService
+
+
+def identidad_lichess(perfil: dict[str, Any]) -> tuple[str, str]:
+    lichess_id = str(perfil.get("id") or perfil.get("username") or "").strip().lower()
+    visible = str(perfil.get("username") or perfil.get("id") or lichess_id).strip()
+    if not lichess_id:
+        raise ValidationError("Lichess no envió el usuario")
+    return lichess_id, visible or lichess_id
+
+
+def normalizar_usuario_lichess(raw: str) -> str:
+    texto = raw.strip()
+    for prefijo in (
+        "https://lichess.org/@/",
+        "http://lichess.org/@/",
+        "https://lichess.org/",
+        "http://lichess.org/",
+    ):
+        if texto.lower().startswith(prefijo):
+            texto = texto[len(prefijo) :]
+            break
+    return texto.lstrip("@").strip()
 
 
 class LichessOAuthService:
@@ -29,7 +53,10 @@ class LichessOAuthService:
             )
         self._exigir_puede_vincular(usuario.id)
         verifier, challenge = generar_pkce()
-        state = firmar_oauth_state({"uid": usuario.id, "cv": verifier, "p": "lichess"})
+        state = firmar_oauth_state(
+            {"uid": usuario.id, "cv": verifier, "p": "lichess"},
+            minutos=60,
+        )
         return self.cliente.url_autorizacion(state, challenge)
 
     def completar(self, code: str, state: str) -> CuentaLichess:
@@ -54,26 +81,38 @@ class LichessOAuthService:
         finally:
             self.cliente.revocar(str(access))
 
-        lichess_id = str(perfil.get("id") or "").strip().lower()
-        visible = str(perfil.get("username") or lichess_id).strip()
-        if not lichess_id:
-            raise ValidationError("Lichess no envió el usuario")
+        lichess_id, visible = identidad_lichess(perfil)
+        return self._guardar(usuario_id, lichess_id, visible)
 
+    def vincular_por_username(self, usuario: Usuario, username: str) -> CuentaLichess:
+        """Si el OAuth falla (modo infantil, app del móvil), se vincula con el usuario público."""
+        self._exigir_puede_vincular(usuario.id)
+        limpio = normalizar_usuario_lichess(username)
+        if not limpio:
+            raise ValidationError("Escribe el usuario de Lichess")
+        perfil = self.cliente.perfil_publico(limpio)
+        lichess_id, visible = identidad_lichess(perfil)
+        return self._guardar(usuario.id, lichess_id, visible)
+
+    def _guardar(self, usuario_id: int, lichess_id: str, visible: str) -> CuentaLichess:
         ocupada = self.cuentas.get_by_username(lichess_id)
         if ocupada is not None:
             raise ConflictError("Esa cuenta de Lichess ya está vinculada a otro usuario")
-
-        cuenta = self.cuentas.create(
-            CuentaLichess(
-                usuario_id=usuario_id,
-                username=lichess_id,
-                username_visible=visible or lichess_id,
-                vinculada_en=datetime.now(timezone.utc),
+        try:
+            cuenta = self.cuentas.create(
+                CuentaLichess(
+                    usuario_id=usuario_id,
+                    username=lichess_id,
+                    username_visible=visible,
+                    vinculada_en=datetime.now(timezone.utc),
+                )
             )
-        )
-        self.auth._asegurar_ratings(usuario_id)
-        self.db.commit()
-        self.db.refresh(cuenta)
+            self.auth._asegurar_ratings(usuario_id)
+            self.db.commit()
+            self.db.refresh(cuenta)
+        except IntegrityError as exc:
+            self.db.rollback()
+            raise ConflictError("Esa cuenta de Lichess ya está vinculada a otro usuario") from exc
         return cuenta
 
     def desvincular(self, usuario: Usuario) -> None:

@@ -20,6 +20,9 @@ class ClienteFalso:
     def cuenta(self, token: str) -> dict:
         return {"id": "ana", "username": "Ana"}
 
+    def perfil_publico(self, username: str) -> dict:
+        return {"id": username.lower(), "username": username}
+
     def revocar(self, token: str) -> None:
         self.revocado = True
 
@@ -94,3 +97,20 @@ def test_url_de_conexion_lleva_pkce(db, usuario_a, monkeypatch):
     url = LichessOAuthService(db, cliente=ClienteFalso()).url_de_conexion(usuario_a)
     assert "code_challenge=" in url
     assert "lichess.org/oauth" in url
+
+
+def test_vincula_escribiendo_el_usuario(db, usuario_a):
+    cuenta = LichessOAuthService(db, cliente=ClienteFalso()).vincular_por_username(
+        usuario_a, "https://lichess.org/@/Ana"
+    )
+    assert cuenta.username == "ana"
+    assert cuenta.username_visible == "Ana"
+
+
+def test_acepta_perfil_sin_id(db, usuario_a):
+    class SoloNombre(ClienteFalso):
+        def cuenta(self, token: str) -> dict:
+            return {"username": "Ana"}
+
+    cuenta = LichessOAuthService(db, cliente=SoloNombre()).completar("codigo", _state(usuario_a.id))
+    assert cuenta.username == "ana"

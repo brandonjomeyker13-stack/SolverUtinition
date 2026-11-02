@@ -34,6 +34,7 @@ class LichessClient:
             "redirect_uri": settings.lichess_redirect_uri,
             "code_challenge_method": "S256",
             "code_challenge": code_challenge,
+            "scope": "preference:read",
             "state": state,
         }
         return f"{settings.LICHESS_AUTH_URL}?{urlencode(params)}"
@@ -53,6 +54,11 @@ class LichessClient:
         except httpx.HTTPError as exc:
             raise ValidationError("Lichess no respondió") from exc
         if respuesta.status_code >= 400:
+            logger.warning(
+                "Lichess rechazó el token (%s): %s",
+                respuesta.status_code,
+                _detalle_error(respuesta),
+            )
             raise ValidationError("Lichess rechazó el inicio de sesión")
         return respuesta.json()
 
@@ -65,8 +71,28 @@ class LichessClient:
         except httpx.HTTPError as exc:
             raise ValidationError("Lichess no respondió la cuenta") from exc
         if respuesta.status_code >= 400:
+            logger.warning(
+                "Lichess no devolvió la cuenta (%s): %s",
+                respuesta.status_code,
+                _detalle_error(respuesta),
+            )
             raise ValidationError("Lichess no devolvió la cuenta")
         return respuesta.json()
+
+    def perfil_publico(self, username: str) -> dict[str, Any]:
+        clave = quote(username.strip(), safe="")
+        try:
+            respuesta = self._http.get(f"{settings.LICHESS_API_URL}/api/user/{clave}")
+        except httpx.HTTPError as exc:
+            raise ValidationError("Lichess no respondió el perfil") from exc
+        if respuesta.status_code == 404:
+            raise ValidationError("No existe esa cuenta de Lichess")
+        if respuesta.status_code >= 400:
+            raise ValidationError("Lichess no respondió el perfil")
+        perfil = respuesta.json()
+        if perfil.get("disabled") or perfil.get("closed"):
+            raise ValidationError("Esa cuenta de Lichess está cerrada")
+        return perfil
 
     def revocar(self, access_token: str) -> None:
         try:
@@ -120,3 +146,13 @@ class LichessClient:
 
     def close(self) -> None:
         self._http.close()
+
+
+def _detalle_error(respuesta: httpx.Response) -> str:
+    try:
+        cuerpo = respuesta.json()
+    except ValueError:
+        return (respuesta.text or "")[:200]
+    if not isinstance(cuerpo, dict):
+        return ""
+    return str(cuerpo.get("error") or cuerpo.get("error_description") or "")[:200]
