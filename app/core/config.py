@@ -38,6 +38,8 @@ class Settings(BaseSettings):
 
     ELO_INICIAL: int = 1000
     ELO_K: int = 20
+    # El ranking del mes cambia a las 00:00 de esta zona. Colombia no tiene horario de verano.
+    RANKING_UTC_OFFSET_HORAS: int = -5
 
     CHESSCOM_CLIENT_ID: str | None = None
     CHESSCOM_CLIENT_SECRET: str | None = None

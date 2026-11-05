@@ -23,8 +23,3 @@ class Rating(Base, TimestampMixin):
     partidas_jugadas: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
     usuario: Mapped["Usuario"] = relationship(back_populates="ratings")
-
-    @property
-    def subida(self) -> int:
-        """Puntos ganados desde el elo de partida. Da igual si el actual es 600 o 2000."""
-        return self.elo - self.elo_inicio

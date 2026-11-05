@@ -1,7 +1,9 @@
+from datetime import datetime, timezone
+
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.models.enums import Plataforma
+from app.models.enums import Plataforma, Ritmo
 from app.models.partida import Partida
 
 
@@ -33,6 +35,22 @@ class PartidaRepository:
             .offset(offset)
             .limit(limit)
         )
+        return list(self.db.execute(stmt).scalars().all())
+
+    def del_periodo(
+        self,
+        ritmo: Ritmo,
+        desde: datetime,
+        hasta: datetime,
+        plataforma: Plataforma | None = None,
+    ) -> list[Partida]:
+        stmt = select(Partida).where(
+            Partida.ritmo == ritmo,
+            Partida.terminada_en >= desde.astimezone(timezone.utc),
+            Partida.terminada_en < hasta.astimezone(timezone.utc),
+        )
+        if plataforma is not None:
+            stmt = stmt.where(Partida.plataforma == plataforma)
         return list(self.db.execute(stmt).scalars().all())
 
     def create(self, partida: Partida) -> Partida:

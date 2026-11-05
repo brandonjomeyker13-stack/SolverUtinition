@@ -26,15 +26,9 @@ class RatingRepository:
         )
         return list(self.db.execute(stmt).scalars().all())
 
-    def ranking_progreso(self, ritmo: Ritmo, limit: int = 100) -> list[Rating]:
-        subida = Rating.elo - Rating.elo_inicio
-        stmt = (
-            select(Rating)
-            .where(Rating.ritmo == ritmo)
-            .order_by(subida.desc(), Rating.partidas_jugadas.desc(), Rating.usuario_id.asc())
-            .limit(limit)
-        )
-        return list(self.db.execute(stmt).scalars().all())
+    def elo_por_usuario(self, ritmo: Ritmo) -> dict[int, int]:
+        stmt = select(Rating.usuario_id, Rating.elo).where(Rating.ritmo == ritmo)
+        return {usuario_id: elo for usuario_id, elo in self.db.execute(stmt).all()}
 
     def create(self, rating: Rating) -> Rating:
         self.db.add(rating)
