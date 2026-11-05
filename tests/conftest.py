@@ -49,6 +49,7 @@ def _usuario(db: Session, nombre: str, email: str) -> Usuario:
                 usuario_id=usuario.id,
                 ritmo=ritmo,
                 elo=settings.ELO_INICIAL,
+                elo_inicio=settings.ELO_INICIAL,
                 partidas_jugadas=0,
             )
         )

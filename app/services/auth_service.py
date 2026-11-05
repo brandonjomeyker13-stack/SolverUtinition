@@ -178,6 +178,7 @@ class AuthService:
                         usuario_id=usuario_id,
                         ritmo=ritmo,
                         elo=settings.ELO_INICIAL,
+                        elo_inicio=settings.ELO_INICIAL,
                         partidas_jugadas=0,
                     )
                 )

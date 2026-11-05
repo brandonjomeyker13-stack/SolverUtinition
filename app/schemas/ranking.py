@@ -12,3 +12,10 @@ class RankingFilaOut(BaseModel):
     ritmo: Ritmo
     elo: int
     partidas_jugadas: int
+
+
+class RankingProgresoFilaOut(RankingFilaOut):
+    """Ordenado por puntos subidos, no por elo actual. El front aún no lo muestra."""
+
+    elo_inicio: int
+    subida: int
