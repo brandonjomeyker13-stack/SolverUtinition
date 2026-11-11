@@ -57,7 +57,7 @@ def test_la_misma_cuenta_de_lichess_no_se_repite(db, usuario_a, usuario_b):
         pass
 
 
-def test_no_vincula_lichess_si_ya_tiene_chesscom(db, usuario_a):
+def test_vincula_lichess_aunque_ya_tenga_chesscom(db, usuario_a):
     db.add(
         CuentaChesscom(
             usuario_id=usuario_a.id,
@@ -67,20 +67,14 @@ def test_no_vincula_lichess_si_ya_tiene_chesscom(db, usuario_a):
         )
     )
     db.commit()
-    try:
-        LichessOAuthService(db, cliente=ClienteFalso()).completar("codigo", _state(usuario_a.id))
-        raise AssertionError("debía fallar")
-    except ConflictError:
-        pass
+    cuenta = LichessOAuthService(db, cliente=ClienteFalso()).completar("codigo", _state(usuario_a.id))
+    assert cuenta.username == "ana"
 
 
-def test_no_vincula_chesscom_si_ya_tiene_lichess(db, usuario_a):
+def test_pide_codigo_de_chesscom_aunque_ya_tenga_lichess(db, usuario_a):
     LichessOAuthService(db, cliente=ClienteFalso()).completar("codigo", _state(usuario_a.id))
-    try:
-        ChesscomOAuthService(db, cliente=PerfilChess()).iniciar_verificacion(usuario_a, "AnaChess")
-        raise AssertionError("debía fallar")
-    except ConflictError:
-        pass
+    v = ChesscomOAuthService(db, cliente=PerfilChess()).iniciar_verificacion(usuario_a, "AnaChess")
+    assert v.codigo.startswith("SU-")
 
 
 def test_url_exige_client_id(db, usuario_a, monkeypatch):

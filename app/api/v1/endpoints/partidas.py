@@ -35,11 +35,16 @@ def sincronizar_ahora(
     usuario: Usuario = Depends(get_current_usuario),
     db: Session = Depends(get_db),
 ) -> SincronizacionOut:
+    total = {"revisadas": 0, "aplicadas": 0, "omitidas": 0}
+    resultados = []
+    if usuario.cuenta_lichess is not None:
+        resultados.append(SincronizacionLichessService(db).sincronizar_usuario(usuario.id))
     if usuario.cuenta_chesscom is not None:
-        resultado = SincronizacionService(db).sincronizar_usuario(usuario.id)
-    else:
-        resultado = SincronizacionLichessService(db).sincronizar_usuario(usuario.id)
-    return SincronizacionOut(**resultado)
+        resultados.append(SincronizacionService(db).sincronizar_usuario(usuario.id))
+    for r in resultados:
+        for k in total:
+            total[k] += r[k]
+    return SincronizacionOut(**total)
 
 
 @router.post("/sincronizar", response_model=SincronizacionOut)

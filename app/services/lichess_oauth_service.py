@@ -11,7 +11,6 @@ from app.core.exceptions import ConflictError, ValidationError
 from app.core.security import firmar_oauth_state, leer_oauth_state
 from app.models.cuenta_lichess import CuentaLichess
 from app.models.usuario import Usuario
-from app.repositories.cuenta_chesscom_repository import CuentaChesscomRepository
 from app.repositories.cuenta_lichess_repository import CuentaLichessRepository
 from app.services.auth_service import AuthService
 
@@ -42,7 +41,6 @@ class LichessOAuthService:
     def __init__(self, db: Session, cliente: LichessClient | None = None):
         self.db = db
         self.cuentas = CuentaLichessRepository(db)
-        self.chesscom = CuentaChesscomRepository(db)
         self.auth = AuthService(db)
         self.cliente = cliente or LichessClient()
 
@@ -125,7 +123,3 @@ class LichessOAuthService:
     def _exigir_puede_vincular(self, usuario_id: int) -> None:
         if self.cuentas.get_by_usuario_id(usuario_id) is not None:
             raise ConflictError("Esta cuenta ya está vinculada a Lichess")
-        if self.chesscom.get_by_usuario_id(usuario_id) is not None:
-            raise ConflictError(
-                "Esta cuenta ya está vinculada a Chess.com. Un jugador usa una sola plataforma."
-            )
