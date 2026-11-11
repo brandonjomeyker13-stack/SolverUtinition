@@ -35,7 +35,10 @@ def sincronizar_ahora(
     usuario: Usuario = Depends(get_current_usuario),
     db: Session = Depends(get_db),
 ) -> SincronizacionOut:
-    resultado = SincronizacionLichessService(db).sincronizar_usuario(usuario.id)
+    if usuario.cuenta_chesscom is not None:
+        resultado = SincronizacionService(db).sincronizar_usuario(usuario.id)
+    else:
+        resultado = SincronizacionLichessService(db).sincronizar_usuario(usuario.id)
     return SincronizacionOut(**resultado)
 
 

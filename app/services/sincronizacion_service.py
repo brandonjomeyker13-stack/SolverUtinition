@@ -1,3 +1,4 @@
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
@@ -101,6 +102,21 @@ class SincronizacionService:
 
     def sincronizar(self) -> dict[str, int]:
         cuentas = {c.username: c for c in self.cuentas.listar_todas()}
+        return self._sincronizar_cuentas(cuentas, cuentas.values())
+
+    def sincronizar_usuario(self, usuario_id: int) -> dict[str, int]:
+        """Solo el archivo de partidas de esta persona: dos meses como mucho."""
+        todas = {c.username: c for c in self.cuentas.listar_todas()}
+        mia = next((c for c in todas.values() if c.usuario_id == usuario_id), None)
+        if mia is None:
+            return {"revisadas": 0, "aplicadas": 0, "omitidas": 0}
+        return self._sincronizar_cuentas(todas, [mia])
+
+    def _sincronizar_cuentas(
+        self,
+        cuentas: dict[str, CuentaChesscom],
+        consultar: Iterable[CuentaChesscom],
+    ) -> dict[str, int]:
         if len(cuentas) < 2:
             return {"revisadas": 0, "aplicadas": 0, "omitidas": 0}
 
@@ -113,7 +129,7 @@ class SincronizacionService:
 
         crudas: list[dict[str, Any]] = []
         vistos: set[str] = set()
-        for cuenta in cuentas.values():
+        for cuenta in consultar:
             for year, month in meses:
                 for game in self.cliente.partidas_mes(cuenta.username, year, month):
                     clave = str(game.get("uuid") or game.get("url") or "")

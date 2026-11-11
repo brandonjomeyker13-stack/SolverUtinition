@@ -42,3 +42,26 @@ def test_aplica_elo_una_sola_vez(db, cuenta_a, cuenta_b):
     assert beto.elo == settings.ELO_INICIAL - round(settings.ELO_K * 0.5)
     assert ana.partidas_jugadas == 1
     assert beto.partidas_jugadas == 1
+
+
+def test_sincroniza_solo_el_archivo_de_quien_pide(db, cuenta_a, cuenta_b):
+    game = {
+        "uuid": "unica-2",
+        "url": "https://www.chess.com/game/live/2",
+        "rules": "chess",
+        "time_class": "blitz",
+        "rated": False,
+        "end_time": int(datetime(2026, 10, 21, tzinfo=timezone.utc).timestamp()),
+        "white": {"username": "Beto", "result": "win"},
+        "black": {"username": "Ana", "result": "resigned"},
+    }
+    consultados: list[str] = []
+
+    class Registro(ClienteFalso):
+        def partidas_mes(self, username: str, year: int, month: int) -> list[dict]:
+            consultados.append(username)
+            return self.games
+
+    r = SincronizacionService(db, cliente=Registro([game])).sincronizar_usuario(cuenta_a.usuario_id)
+    assert r["aplicadas"] == 1
+    assert set(consultados) == {"ana"}

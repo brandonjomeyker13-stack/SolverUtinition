@@ -1,5 +1,12 @@
-from datetime import datetime, timezone
+import re
+import secrets
+from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
+from typing import Any
 
+from jose import JWTError
+from jose.exceptions import ExpiredSignatureError
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.clients.chesscom import ChesscomClient, generar_pkce, username_desde_tokens
@@ -11,6 +18,47 @@ from app.models.usuario import Usuario
 from app.repositories.cuenta_chesscom_repository import CuentaChesscomRepository
 from app.repositories.cuenta_lichess_repository import CuentaLichessRepository
 from app.services.auth_service import AuthService
+
+MINUTOS_VERIFICACION = 60
+_PROPOSITO_UBICACION = "chesscom-ubicacion"
+# Sin 0/O ni 1/I/L: el código se copia a mano en el móvil.
+_ALFABETO_CODIGO = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
+_USERNAME_CHESSCOM = re.compile(r"[A-Za-z0-9_-]{3,25}")
+
+
+@dataclass(frozen=True)
+class VerificacionChesscom:
+    username_visible: str
+    codigo: str
+    token: str
+    expira_en: datetime
+
+
+def normalizar_usuario_chesscom(raw: str) -> str:
+    texto = raw.strip()
+    for prefijo in (
+        "https://www.chess.com/member/",
+        "https://chess.com/member/",
+        "http://www.chess.com/member/",
+        "www.chess.com/member/",
+        "chess.com/member/",
+    ):
+        if texto.lower().startswith(prefijo):
+            texto = texto[len(prefijo) :]
+            break
+    return texto.strip("/").lstrip("@").strip()
+
+
+def _identidad(perfil: dict[str, Any], respaldo: str) -> tuple[str, str, str | None]:
+    estado = str(perfil.get("status") or "")
+    if estado.startswith("closed"):
+        raise ValidationError("Esa cuenta de Chess.com está cerrada")
+    clave = str(perfil.get("username") or respaldo).strip().lower()
+    # `username` llega en minúsculas; la URL del perfil conserva las mayúsculas.
+    de_url = str(perfil.get("url") or "").rstrip("/").rsplit("/", 1)[-1]
+    visible = de_url if de_url.lower() == clave else clave
+    uuid = perfil.get("player_id") or perfil.get("uuid")
+    return visible, clave, str(uuid) if uuid else None
 
 
 class ChesscomOAuthService:
@@ -61,35 +109,80 @@ class ChesscomOAuthService:
         self.db.refresh(cuenta)
         return cuenta
 
-    def vincular_por_username(self, usuario: Usuario, username: str) -> CuentaChesscom:
-        """Vincula con la PubAPI: no hace falta el OAuth que Chess.com aún no entregó."""
+    def iniciar_verificacion(self, usuario: Usuario, username: str) -> VerificacionChesscom:
+        """Mientras Chess.com no aprueba el OAuth: el jugador prueba que es suyo
+        poniendo un código en la ubicación de su perfil público."""
         self._exigir_puede_vincular(usuario.id)
+        limpio = normalizar_usuario_chesscom(username)
+        if not _USERNAME_CHESSCOM.fullmatch(limpio):
+            raise ValidationError("Escribe tu usuario de Chess.com tal como aparece en tu perfil")
 
-        limpio = username.strip()
-        if not limpio:
-            raise ValidationError("Escribe el username de Chess.com")
+        visible, clave, uuid = _identidad(self.cliente.perfil(limpio), limpio)
+        self._exigir_libre(clave, uuid)
 
-        perfil = self.cliente.perfil(limpio)
-        visible = str(perfil.get("username") or limpio)
-        clave = visible.lower()
-        ocupada = self.cuentas.get_by_username(clave)
-        if ocupada is not None:
-            raise ConflictError("Esa cuenta de Chess.com ya está vinculada a otro usuario")
-
-        uuid = perfil.get("player_id") or perfil.get("uuid")
-        cuenta = self.cuentas.create(
-            CuentaChesscom(
-                usuario_id=usuario.id,
-                username=clave,
-                username_visible=visible,
-                chesscom_uuid=str(uuid) if uuid else None,
-                vinculada_en=datetime.now(timezone.utc),
-            )
+        codigo = "SU-" + "".join(secrets.choice(_ALFABETO_CODIGO) for _ in range(6))
+        token = firmar_oauth_state(
+            {"p": _PROPOSITO_UBICACION, "uid": usuario.id, "u": clave, "pid": uuid, "c": codigo},
+            minutos=MINUTOS_VERIFICACION,
         )
-        self.auth._asegurar_ratings(usuario.id)
-        self.db.commit()
-        self.db.refresh(cuenta)
+        return VerificacionChesscom(
+            username_visible=visible,
+            codigo=codigo,
+            token=token,
+            expira_en=datetime.now(timezone.utc) + timedelta(minutes=MINUTOS_VERIFICACION),
+        )
+
+    def confirmar_verificacion(self, usuario: Usuario, token: str) -> CuentaChesscom:
+        try:
+            claims = leer_oauth_state(token)
+        except ExpiredSignatureError as exc:
+            raise ValidationError("El código venció. Pide uno nuevo.") from exc
+        except JWTError as exc:
+            raise ValidationError("La verificación no es válida. Pide un código nuevo.") from exc
+        if claims.get("p") != _PROPOSITO_UBICACION or claims.get("uid") != usuario.id:
+            raise ValidationError("La verificación no es válida. Pide un código nuevo.")
+
+        self._exigir_puede_vincular(usuario.id)
+        username = str(claims.get("u") or "")
+        codigo = str(claims.get("c") or "")
+        perfil = self.cliente.perfil(username, fresco=True)
+        visible, clave, uuid = _identidad(perfil, username)
+
+        esperado = claims.get("pid")
+        if esperado and uuid and str(esperado) != uuid:
+            raise ValidationError("Esa cuenta de Chess.com cambió. Pide un código nuevo.")
+
+        ubicacion = str(perfil.get("location") or "")
+        if not codigo or codigo.upper() not in ubicacion.upper():
+            raise ValidationError(
+                f"Todavía no vemos {codigo} en la ubicación de tu perfil de Chess.com. "
+                "Revisa que lo guardaste. Chess.com puede tardar un par de minutos en mostrarlo."
+            )
+
+        self._exigir_libre(clave, uuid)
+        try:
+            cuenta = self.cuentas.create(
+                CuentaChesscom(
+                    usuario_id=usuario.id,
+                    username=clave,
+                    username_visible=visible,
+                    chesscom_uuid=uuid,
+                    vinculada_en=datetime.now(timezone.utc),
+                )
+            )
+            self.auth._asegurar_ratings(usuario.id)
+            self.db.commit()
+            self.db.refresh(cuenta)
+        except IntegrityError as exc:
+            self.db.rollback()
+            raise ConflictError("Esa cuenta de Chess.com ya está vinculada a otro usuario") from exc
         return cuenta
+
+    def _exigir_libre(self, clave: str, uuid: str | None) -> None:
+        if self.cuentas.get_by_username(clave) is not None or (
+            uuid and self.cuentas.get_by_uuid(uuid) is not None
+        ):
+            raise ConflictError("Esa cuenta de Chess.com ya está vinculada a otro usuario")
 
     def _exigir_puede_vincular(self, usuario_id: int) -> None:
         if self.cuentas.get_by_usuario_id(usuario_id) is not None:

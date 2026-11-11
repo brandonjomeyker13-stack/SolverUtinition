@@ -3,7 +3,7 @@ import secrets
 from base64 import urlsafe_b64encode
 from datetime import datetime, timezone
 from typing import Any
-from urllib.parse import urlencode
+from urllib.parse import quote, urlencode
 
 import httpx
 from jose import jwt as jose_jwt
@@ -93,10 +93,14 @@ class ChesscomClient:
             raise ValidationError("Chess.com rechazó el intercambio de código")
         return respuesta.json()
 
-    def perfil(self, username: str) -> dict[str, Any]:
-        url = f"{settings.CHESSCOM_PUBAPI_URL}/player/{username}"
-        respuesta = self._http.get(url)
-        if respuesta.status_code == 404:
+    def perfil(self, username: str, fresco: bool = False) -> dict[str, Any]:
+        url = f"{settings.CHESSCOM_PUBAPI_URL}/player/{quote(username.strip().lower(), safe='')}"
+        headers = {"Cache-Control": "no-cache"} if fresco else None
+        try:
+            respuesta = self._http.get(url, headers=headers)
+        except httpx.HTTPError as exc:
+            raise ValidationError("Chess.com no respondió el perfil") from exc
+        if respuesta.status_code in (404, 410):
             raise ValidationError("No existe esa cuenta de Chess.com")
         if respuesta.status_code >= 400:
             raise ValidationError("Chess.com no respondió el perfil")

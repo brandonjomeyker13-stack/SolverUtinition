@@ -28,8 +28,8 @@ class ClienteFalso:
 
 
 class PerfilChess:
-    def perfil(self, username: str) -> dict:
-        return {"username": username, "player_id": 1}
+    def perfil(self, username: str, fresco: bool = False) -> dict:
+        return {"username": username, "player_id": 1, "status": "basic"}
 
 
 def _state(usuario_id: int) -> str:
@@ -77,7 +77,7 @@ def test_no_vincula_lichess_si_ya_tiene_chesscom(db, usuario_a):
 def test_no_vincula_chesscom_si_ya_tiene_lichess(db, usuario_a):
     LichessOAuthService(db, cliente=ClienteFalso()).completar("codigo", _state(usuario_a.id))
     try:
-        ChesscomOAuthService(db, cliente=PerfilChess()).vincular_por_username(usuario_a, "AnaChess")
+        ChesscomOAuthService(db, cliente=PerfilChess()).iniciar_verificacion(usuario_a, "AnaChess")
         raise AssertionError("debía fallar")
     except ConflictError:
         pass
