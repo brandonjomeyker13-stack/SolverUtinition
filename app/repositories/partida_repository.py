@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.models.enums import Plataforma, Ritmo
 from app.models.partida import Partida
@@ -30,6 +30,7 @@ class PartidaRepository:
     def listar_de_usuario(self, usuario_id: int, offset: int = 0, limit: int = 50) -> list[Partida]:
         stmt = (
             select(Partida)
+            .options(selectinload(Partida.blanca), selectinload(Partida.negra))
             .where((Partida.blanca_id == usuario_id) | (Partida.negra_id == usuario_id))
             .order_by(Partida.terminada_en.desc())
             .offset(offset)
@@ -37,20 +38,11 @@ class PartidaRepository:
         )
         return list(self.db.execute(stmt).scalars().all())
 
-    def del_periodo(
-        self,
-        ritmo: Ritmo,
-        desde: datetime,
-        hasta: datetime,
-        plataforma: Plataforma | None = None,
-    ) -> list[Partida]:
+    def desde_instante(self, ritmo: Ritmo, desde: datetime) -> list[Partida]:
         stmt = select(Partida).where(
             Partida.ritmo == ritmo,
             Partida.terminada_en >= desde.astimezone(timezone.utc),
-            Partida.terminada_en < hasta.astimezone(timezone.utc),
         )
-        if plataforma is not None:
-            stmt = stmt.where(Partida.plataforma == plataforma)
         return list(self.db.execute(stmt).scalars().all())
 
     def create(self, partida: Partida) -> Partida:

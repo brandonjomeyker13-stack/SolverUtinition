@@ -53,3 +53,11 @@ class Partida(Base, TimestampMixin):
 
     blanca: Mapped["Usuario"] = relationship(foreign_keys=[blanca_id])
     negra: Mapped["Usuario"] = relationship(foreign_keys=[negra_id])
+
+    @property
+    def blanca_nombre(self) -> str:
+        return self.blanca.nombre
+
+    @property
+    def negra_nombre(self) -> str:
+        return self.negra.nombre

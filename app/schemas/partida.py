@@ -13,6 +13,8 @@ class PartidaOut(BaseModel):
     plataforma_partida_id: str
     blanca_id: int
     negra_id: int
+    blanca_nombre: str
+    negra_nombre: str
     ritmo: Ritmo
     rated_en_plataforma: bool
     resultado: ResultadoPartida

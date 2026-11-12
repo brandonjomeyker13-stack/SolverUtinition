@@ -22,6 +22,7 @@ class RankingMensualFilaOut(BaseModel):
     nombre: str
     chesscom_username: str | None
     lichess_username: str | None
+    elo_inicio: int
     elo: int
     subida: int
     partidas: int
@@ -31,7 +32,10 @@ class RankingMensualFilaOut(BaseModel):
 
 
 class RankingMensualOut(BaseModel):
-    """Puntos ganados en el mes, no elo actual: subir de 500 a 600 vale más que de 2000 a 2010."""
+    """Puntos ganados en el mes, no elo actual: subir de 500 a 600 vale más que de 2000 a 2010.
+
+    `elo_inicio` es el elo al empezar el mes; `elo`, el del cierre (o el actual si el mes sigue).
+    """
 
     mes: str
     ritmo: Ritmo

@@ -1,9 +1,13 @@
 from datetime import datetime, timedelta, timezone
 
 from app.core.meses import rango_mes
+from app.models.cuenta_lichess import CuentaLichess
 from app.models.enums import Plataforma, ResultadoPartida, Ritmo
 from app.models.partida import Partida
 from app.models.usuario import Usuario
+from app.repositories.partida_repository import PartidaRepository
+from app.repositories.rating_repository import RatingRepository
+from app.schemas.partida import PartidaOut
 from app.services.ranking_service import RankingService
 
 NOV = datetime(2026, 11, 10, 18, tzinfo=timezone.utc)
@@ -114,3 +118,58 @@ def test_filtra_por_plataforma_y_ritmo(db, usuario_a, usuario_b):
 
     blitz = service.listar_mensual(Ritmo.BLITZ, "2026-11", Plataforma.LICHESS)
     assert blitz.filas[0].usuario_id == usuario_b.id
+
+
+def _lichess(db, usuario: Usuario) -> None:
+    db.add(
+        CuentaLichess(
+            usuario_id=usuario.id,
+            username=usuario.nombre.lower(),
+            username_visible=usuario.nombre,
+            vinculada_en=datetime(2026, 9, 1, tzinfo=timezone.utc),
+        )
+    )
+
+
+def test_salen_todos_con_el_elo_de_inicio_y_su_cambio(db, usuario_a, usuario_b):
+    _lichess(db, usuario_a)
+    _lichess(db, usuario_b)
+    octubre = datetime(2026, 10, 15, tzinfo=timezone.utc)
+    db.add_all(
+        [
+            _partida("oct", usuario_a, usuario_b, 10, ResultadoPartida.BLANCA, cuando=octubre),
+            _partida("nov", usuario_a, usuario_b, 10, ResultadoPartida.BLANCA),
+        ]
+    )
+    ratings = RatingRepository(db)
+    ratings.get(usuario_a.id, Ritmo.RAPID).elo = 1020
+    ratings.get(usuario_b.id, Ritmo.RAPID).elo = 980
+    db.commit()
+    service = RankingService(db)
+
+    nov = {f.usuario_id: f for f in service.listar_mensual(Ritmo.RAPID, "2026-11").filas}
+    assert (nov[usuario_a.id].elo_inicio, nov[usuario_a.id].elo, nov[usuario_a.id].subida) == (1010, 1020, 10)
+    assert (nov[usuario_b.id].elo_inicio, nov[usuario_b.id].elo, nov[usuario_b.id].subida) == (990, 980, -10)
+
+    octu = {f.usuario_id: f for f in service.listar_mensual(Ritmo.RAPID, "2026-10").filas}
+    assert (octu[usuario_a.id].elo_inicio, octu[usuario_a.id].elo) == (1000, 1010)
+
+    blitz = service.listar_mensual(Ritmo.BLITZ, "2026-11", Plataforma.LICHESS).filas
+    assert {(f.usuario_id, f.subida, f.partidas) for f in blitz} == {
+        (usuario_a.id, 0, 0),
+        (usuario_b.id, 0, 0),
+    }
+
+
+def test_filtro_de_plataforma_deja_fuera_a_quien_no_la_tiene(db, usuario_a, usuario_b):
+    _lichess(db, usuario_a)
+    db.commit()
+    filas = RankingService(db).listar_mensual(Ritmo.RAPID, "2026-11", Plataforma.LICHESS).filas
+    assert [f.usuario_id for f in filas] == [usuario_a.id]
+
+
+def test_la_partida_trae_el_nombre_de_los_dos(db, usuario_a, usuario_b):
+    db.add(_partida("p1", usuario_a, usuario_b, 10, ResultadoPartida.BLANCA))
+    db.commit()
+    salida = PartidaOut.model_validate(PartidaRepository(db).listar_de_usuario(usuario_b.id)[0])
+    assert (salida.blanca_nombre, salida.negra_nombre) == ("Ana", "Beto")
