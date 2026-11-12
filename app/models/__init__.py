@@ -1,5 +1,6 @@
 from app.models.cuenta_chesscom import CuentaChesscom
 from app.models.cuenta_lichess import CuentaLichess
+from app.models.elo_real import EloRealMes
 from app.models.partida import Partida
 from app.models.rating import Rating
 from app.models.refresh_token import RefreshToken
@@ -12,4 +13,5 @@ __all__ = [
     "CuentaLichess",
     "Rating",
     "Partida",
+    "EloRealMes",
 ]

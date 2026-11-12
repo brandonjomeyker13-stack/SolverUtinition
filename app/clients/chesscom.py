@@ -106,9 +106,32 @@ class ChesscomClient:
             raise ValidationError("Chess.com no respondió el perfil")
         return respuesta.json()
 
+    def archivos(self, username: str) -> list[tuple[int, int]]:
+        """Los meses (año, mes) en los que la cuenta tiene partidas, del más viejo al más nuevo."""
+        url = f"{settings.CHESSCOM_PUBAPI_URL}/player/{quote(username, safe='')}/games/archives"
+        try:
+            respuesta = self._http.get(url)
+        except httpx.HTTPError as exc:
+            raise ValidationError(f"Chess.com no respondió el archivo de {username}") from exc
+        if respuesta.status_code in (404, 410):
+            return []
+        if respuesta.status_code >= 400:
+            raise ValidationError(f"Chess.com no respondió el archivo de {username}")
+        meses: list[tuple[int, int]] = []
+        for enlace in respuesta.json().get("archives") or []:
+            try:
+                anio, mes = str(enlace).rstrip("/").split("/")[-2:]
+                meses.append((int(anio), int(mes)))
+            except ValueError:
+                continue
+        return sorted(meses)
+
     def partidas_mes(self, username: str, year: int, month: int) -> list[dict[str, Any]]:
-        url = f"{settings.CHESSCOM_PUBAPI_URL}/player/{username}/games/{year}/{month:02d}"
-        respuesta = self._http.get(url)
+        url = f"{settings.CHESSCOM_PUBAPI_URL}/player/{quote(username, safe='')}/games/{year}/{month:02d}"
+        try:
+            respuesta = self._http.get(url)
+        except httpx.HTTPError as exc:
+            raise ValidationError(f"No se pudieron leer las partidas de {username}") from exc
         if respuesta.status_code == 404:
             return []
         if respuesta.status_code >= 400:

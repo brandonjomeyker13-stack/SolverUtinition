@@ -6,6 +6,7 @@ from app.db.session import get_db
 from app.models.usuario import Usuario
 from app.repositories.partida_repository import PartidaRepository
 from app.schemas.partida import PartidaOut, SincronizacionOut
+from app.services.elo_real_service import EloRealService
 from app.services.sincronizacion_lichess_service import SincronizacionLichessService
 from app.services.sincronizacion_service import SincronizacionService
 
@@ -15,6 +16,7 @@ router = APIRouter(prefix="/partidas", tags=["partidas"])
 def _correr(db: Session) -> SincronizacionOut:
     lichess = SincronizacionLichessService(db).sincronizar()
     chesscom = SincronizacionService(db).sincronizar()
+    EloRealService(db).actualizar_todos()
     return SincronizacionOut(
         revisadas=lichess["revisadas"] + chesscom["revisadas"],
         aplicadas=lichess["aplicadas"] + chesscom["aplicadas"],
@@ -44,6 +46,7 @@ def sincronizar_ahora(
     for r in resultados:
         for k in total:
             total[k] += r[k]
+    EloRealService(db).actualizar_usuario(usuario.id)
     return SincronizacionOut(**total)
 
 

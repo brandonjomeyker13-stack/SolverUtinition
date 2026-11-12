@@ -94,6 +94,19 @@ class LichessClient:
             raise ValidationError("Esa cuenta de Lichess está cerrada")
         return perfil
 
+    def historial_rating(self, username: str) -> list[dict[str, Any]]:
+        """[{"name": "blitz", "points": [[año, mes desde 0, día, rating], ...]}, ...]"""
+        clave = quote(username.strip(), safe="")
+        try:
+            respuesta = self._http.get(f"{settings.LICHESS_API_URL}/api/user/{clave}/rating-history")
+        except httpx.HTTPError as exc:
+            raise ValidationError("Lichess no respondió el historial de rating") from exc
+        if respuesta.status_code == 404:
+            return []
+        if respuesta.status_code >= 400:
+            raise ValidationError("Lichess no respondió el historial de rating")
+        return list(respuesta.json() or [])
+
     def revocar(self, access_token: str) -> None:
         try:
             self._http.delete(

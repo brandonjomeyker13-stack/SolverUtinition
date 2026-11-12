@@ -31,6 +31,26 @@ class RankingMensualFilaOut(BaseModel):
     perdidas: int
 
 
+class RankingRealFilaOut(BaseModel):
+    posicion: int
+    usuario_id: int
+    nombre: str
+    username: str
+    elo_inicio: int
+    elo: int
+    subida: int
+    partidas: int | None
+
+
+class RankingRealOut(BaseModel):
+    """Rating real de la cuenta en la plataforma: cuánto subió en el mes."""
+
+    mes: str
+    ritmo: Ritmo
+    plataforma: Plataforma
+    filas: list[RankingRealFilaOut]
+
+
 class RankingMensualOut(BaseModel):
     """Puntos ganados en el mes, no elo actual: subir de 500 a 600 vale más que de 2000 a 2010.
 

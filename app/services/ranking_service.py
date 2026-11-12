@@ -2,16 +2,24 @@ from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.meses import rango_mes
+from app.models.elo_real import EloRealMes
 from app.models.enums import Plataforma, ResultadoPartida, Ritmo
 from app.repositories.cuenta_chesscom_repository import CuentaChesscomRepository
 from app.repositories.cuenta_lichess_repository import CuentaLichessRepository
 from app.repositories.partida_repository import PartidaRepository
 from app.repositories.rating_repository import RatingRepository
 from app.repositories.usuario_repository import UsuarioRepository
-from app.schemas.ranking import RankingFilaOut, RankingMensualFilaOut, RankingMensualOut
+from app.schemas.ranking import (
+    RankingFilaOut,
+    RankingMensualFilaOut,
+    RankingMensualOut,
+    RankingRealFilaOut,
+    RankingRealOut,
+)
 
 
 @dataclass
@@ -47,6 +55,7 @@ def _puntos_blanca(resultado: ResultadoPartida) -> float:
 
 class RankingService:
     def __init__(self, db: Session):
+        self.db = db
         self.ratings = RatingRepository(db)
         self.usuarios = UsuarioRepository(db)
         self.partidas = PartidaRepository(db)
@@ -75,6 +84,55 @@ class RankingService:
                 )
             )
         return salida
+
+    def listar_real(
+        self,
+        plataforma: Plataforma,
+        ritmo: Ritmo,
+        mes: str | None = None,
+        limit: int = 100,
+    ) -> RankingRealOut:
+        etiqueta, _, _ = rango_mes(mes)
+        repo = self.lichess if plataforma == Plataforma.LICHESS else self.cuentas
+        nombres = {c.usuario_id: c.username_visible for c in repo.listar_todas()}
+        filas = self.db.scalars(
+            select(EloRealMes).where(
+                EloRealMes.plataforma == plataforma,
+                EloRealMes.ritmo == ritmo,
+                EloRealMes.mes == etiqueta,
+            )
+        ).all()
+
+        candidatas: list[tuple[EloRealMes, str]] = []
+        for fila in filas:
+            if fila.usuario_id not in nombres:
+                continue
+            usuario = self.usuarios.get_by_id(fila.usuario_id)
+            if usuario is None or not usuario.activo:
+                continue
+            candidatas.append((fila, usuario.nombre))
+        candidatas.sort(
+            key=lambda c: (-(c[0].elo - c[0].elo_inicio), -c[0].elo, c[0].usuario_id)
+        )
+
+        return RankingRealOut(
+            mes=etiqueta,
+            ritmo=ritmo,
+            plataforma=plataforma,
+            filas=[
+                RankingRealFilaOut(
+                    posicion=posicion,
+                    usuario_id=fila.usuario_id,
+                    nombre=nombre,
+                    username=nombres[fila.usuario_id],
+                    elo_inicio=fila.elo_inicio,
+                    elo=fila.elo,
+                    subida=fila.elo - fila.elo_inicio,
+                    partidas=fila.partidas,
+                )
+                for posicion, (fila, nombre) in enumerate(candidatas[:limit], start=1)
+            ],
+        )
 
     def listar_mensual(
         self,
