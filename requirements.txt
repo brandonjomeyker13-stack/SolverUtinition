@@ -22,6 +22,10 @@ httpx==0.28.1
 # google-auth usa requests para verificar el id_token.
 requests==2.34.2
 
+# --- Análisis de partidas y notificaciones ---
+chess==1.11.2
+pywebpush==2.0.3
+
 # --- Utilidades ---
 python-multipart==0.0.20
 tzdata==2026.3

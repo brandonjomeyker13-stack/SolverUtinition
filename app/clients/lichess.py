@@ -132,6 +132,23 @@ class LichessClient:
             },
         )
 
+    def partidas_generales(
+        self, username: str, limite: int = 30, since_ms: int | None = None
+    ) -> list[dict[str, Any]]:
+        """Todas las partidas estándar, con PGN, relojes y el análisis de Lichess si ya existe."""
+        params: dict[str, Any] = {
+            "max": max(1, min(limite, 60)),
+            "perfType": "ultraBullet,bullet,blitz,rapid,classical,correspondence",
+            "pgnInJson": "true",
+            "clocks": "true",
+            "evals": "true",
+            "opening": "true",
+            "literate": "false",
+        }
+        if since_ms is not None:
+            params["since"] = since_ms
+        return self._ndjson(username, params)
+
     def _ndjson(self, username: str, params: dict[str, Any]) -> list[dict[str, Any]]:
         url = f"{settings.LICHESS_API_URL}/api/games/user/{quote(username, safe='')}"
         try:

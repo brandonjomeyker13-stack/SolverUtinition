@@ -1,3 +1,4 @@
+from app.models.analisis import AnalisisPartida, ResumenSemanal, SuscripcionPush
 from app.models.cuenta_chesscom import CuentaChesscom
 from app.models.cuenta_lichess import CuentaLichess
 from app.models.elo_real import EloRealMes
@@ -14,4 +15,7 @@ __all__ = [
     "Rating",
     "Partida",
     "EloRealMes",
+    "AnalisisPartida",
+    "ResumenSemanal",
+    "SuscripcionPush",
 ]

@@ -60,6 +60,17 @@ class Settings(BaseSettings):
 
     CRON_SECRET: str | None = None
 
+    # Notificaciones push del navegador. Las claves salen de `python -m app.jobs.claves_push`.
+    VAPID_PUBLIC_KEY: str | None = None
+    VAPID_PRIVATE_KEY: str | None = None
+    # Apple exige un mailto: o una URL https para saber a quién avisar si algo falla.
+    VAPID_CONTACTO: str | None = None
+
+    # Análisis del resumen semanal (GitHub Actions).
+    STOCKFISH_PATH: str = "stockfish"
+    ANALISIS_NODOS: int = 300_000
+    RESUMEN_MAX_PARTIDAS: int = 40
+
     # Client ID de Google Identity Services (el del front). Sin esto,
     # POST /auth/google rechaza todo.
     GOOGLE_CLIENT_ID: str | None = None
@@ -114,6 +125,14 @@ class Settings(BaseSettings):
     @property
     def lichess_redirect_uri(self) -> str:
         return (self.LICHESS_REDIRECT_URI or "").strip()
+
+    @property
+    def push_listo(self) -> bool:
+        return bool(self.VAPID_PUBLIC_KEY and self.VAPID_PRIVATE_KEY)
+
+    @property
+    def vapid_contacto(self) -> str:
+        return (self.VAPID_CONTACTO or "").strip() or self.FRONTEND_URL
 
     @property
     def lichess_user_agent(self) -> str:

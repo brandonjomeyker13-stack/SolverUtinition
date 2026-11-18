@@ -1,0 +1,66 @@
+name: Resumen semanal
+
+on:
+  schedule:
+    # Lunes 13:00 UTC = 8:00 en Colombia.
+    - cron: "0 13 * * 1"
+  workflow_dispatch:
+    inputs:
+      usuario:
+        description: "Solo este usuario (id). Vacío = todos"
+        required: false
+        default: ""
+      dias:
+        description: "Días hacia atrás"
+        required: false
+        default: "7"
+      sin_push:
+        description: "No enviar notificaciones"
+        type: boolean
+        default: false
+
+concurrency:
+  group: resumen-semanal
+  cancel-in-progress: false
+
+jobs:
+  resumen:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    env:
+      ENVIRONMENT: production
+      DEBUG: "false"
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      # El resumen no firma tokens, pero la configuración lo exige.
+      JWT_SECRET_KEY: no-se-usa-en-el-resumen
+      VAPID_PUBLIC_KEY: ${{ secrets.VAPID_PUBLIC_KEY }}
+      VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+      VAPID_CONTACTO: ${{ secrets.VAPID_CONTACTO }}
+      LICHESS_USER_AGENT: ${{ vars.LICHESS_USER_AGENT }}
+      CHESSCOM_USER_AGENT: ${{ vars.CHESSCOM_USER_AGENT }}
+      STOCKFISH_PATH: /usr/games/stockfish
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Instalar Stockfish
+        run: sudo apt-get update -q && sudo apt-get install -y -q stockfish
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      - name: Armar y enviar resúmenes
+        env:
+          ENTRADA_USUARIO: ${{ github.event.inputs.usuario }}
+          ENTRADA_DIAS: ${{ github.event.inputs.dias }}
+          ENTRADA_SIN_PUSH: ${{ github.event.inputs.sin_push }}
+        run: |
+          set -euo pipefail
+          ARGS=(--dias "${ENTRADA_DIAS:-7}")
+          if [[ -n "${ENTRADA_USUARIO:-}" ]]; then ARGS+=(--usuario "$ENTRADA_USUARIO"); fi
+          if [[ "${ENTRADA_SIN_PUSH:-false}" == "true" ]]; then ARGS+=(--sin-push); fi
+          python -m app.jobs.resumen_semanal "${ARGS[@]}"
