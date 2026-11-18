@@ -29,6 +29,7 @@ class PartidaGeneralOut(BaseModel):
     apertura: str | None
     analizada: bool = False
     precision: float | None = None
+    precision_oficial: dict[str, float] | None = None
 
 
 class Evaluacion(BaseModel):

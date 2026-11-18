@@ -37,6 +37,8 @@ class PartidaGeneral:
     terminada_en: datetime
     apertura: str | None
     analisis_lichess: list[dict[str, Any]] | None = field(default=None, repr=False)
+    # La de Chess.com, solo si alguien abrió el Game Review: {"white": 85.4, "black": 75.9}.
+    precision_oficial: dict[str, float] | None = None
 
 
 def _resultado(propio: str, rival: str, tablas: bool) -> str | None:
@@ -143,7 +145,17 @@ def desde_chesscom(game: dict[str, Any], username: str) -> PartidaGeneral | None
         control=_control_chesscom(str(game.get("time_control") or "")),
         terminada_en=fin,
         apertura=apertura_chesscom(str(game.get("eco") or "")) or _cabecera(str(pgn), "Opening"),
+        precision_oficial=_precisiones(game.get("accuracies")),
     )
+
+
+def _precisiones(raw: Any) -> dict[str, float] | None:
+    if not isinstance(raw, dict):
+        return None
+    try:
+        return {"white": round(float(raw["white"]), 1), "black": round(float(raw["black"]), 1)}
+    except (KeyError, TypeError, ValueError):
+        return None
 
 
 def _entero(valor: Any) -> int | None:

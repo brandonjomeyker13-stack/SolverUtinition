@@ -48,19 +48,47 @@ class Jugada:
     caida: float
     clase: str | None
     precision: float
+    # Cuánto se movía la partida alrededor de esta jugada: las posiciones
+    # agitadas pesan más en la precisión, como en Lichess.
+    peso: float = 1.0
+
+
+def _desviacion(valores: list[float]) -> float:
+    media = sum(valores) / len(valores)
+    return math.sqrt(sum((v - media) ** 2 for v in valores) / len(valores))
+
+
+def _pesos(porcentajes: list[float], jugadas_totales: int) -> list[float]:
+    ventana = max(2, min(8, jugadas_totales // 10))
+    if len(porcentajes) <= ventana:
+        ventanas = [porcentajes]
+    else:
+        ventanas = [porcentajes[i : i + ventana] for i in range(len(porcentajes) - ventana + 1)]
+    ventanas = [porcentajes[:ventana]] * max(0, min(ventana, len(porcentajes)) - 2) + ventanas
+    return [max(0.5, min(12.0, _desviacion(v))) for v in ventanas]
 
 
 def jugadas(eval_inicial: dict[str, Any], evals: list[dict[str, Any]], blancas_empiezan: bool = True) -> list[Jugada]:
+    porcentajes = [porcentaje_victoria(centipeones(e)) for e in [eval_inicial, *evals]]
+    pesos = _pesos(porcentajes, len(evals))
     salida: list[Jugada] = []
-    previo = porcentaje_victoria(centipeones(eval_inicial))
-    for i, evaluacion in enumerate(evals):
+    for i in range(len(evals)):
         blancas = (i % 2 == 0) == blancas_empiezan
-        actual = porcentaje_victoria(centipeones(evaluacion))
+        previo, actual = porcentajes[i], porcentajes[i + 1]
         antes, despues = (previo, actual) if blancas else (100 - previo, 100 - actual)
         caida = max(0.0, antes - despues)
-        salida.append(Jugada(i, blancas, caida, clase(caida), precision_jugada(antes, despues)))
-        previo = actual
+        peso = pesos[i] if i < len(pesos) else pesos[-1]
+        salida.append(Jugada(i, blancas, caida, clase(caida), precision_jugada(antes, despues), peso))
     return salida
+
+
+def precision_partida(lista: list[Jugada]) -> float | None:
+    """Media ponderada y media armónica, a partes iguales: un error grave pesa mucho."""
+    if not lista:
+        return None
+    ponderada = sum(j.precision * j.peso for j in lista) / sum(j.peso for j in lista)
+    armonica = len(lista) / sum(1 / max(1.0, j.precision) for j in lista)
+    return round((ponderada + armonica) / 2, 1)
 
 
 @dataclass(frozen=True)
@@ -76,7 +104,7 @@ def totales(lista: list[Jugada], color: str) -> Totales:
     if not mias:
         return Totales(None, 0, 0, 0)
     return Totales(
-        precision=round(sum(j.precision for j in mias) / len(mias), 1),
+        precision=precision_partida(mias),
         imprecisiones=sum(1 for j in mias if j.clase == "imprecision"),
         errores=sum(1 for j in mias if j.clase == "error"),
         errores_graves=sum(1 for j in mias if j.clase == "error_grave"),

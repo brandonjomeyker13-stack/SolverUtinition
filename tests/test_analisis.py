@@ -71,6 +71,17 @@ def test_el_error_que_deja_mate_es_grave_para_quien_lo_juega():
     assert totales(lista, "white").errores_graves == 0
 
 
+def test_un_error_grave_baja_la_precision_mas_que_un_promedio_simple():
+    tranquilas = [{"cp": 20}] * 30
+    # La jugada 15 es de las negras y regala seis peones.
+    con_error = tranquilas[:15] + [{"cp": 600}] * 15
+    lista = jugadas(EVAL_INICIAL, con_error)
+    negras = [j for j in lista if not j.blancas]
+    simple = sum(j.precision for j in negras) / len(negras)
+    assert totales(lista, "black").precision < simple
+    assert totales(jugadas(EVAL_INICIAL, tranquilas), "white").precision == pytest.approx(100, abs=0.5)
+
+
 def test_los_relojes_dicen_cuanto_tardo_cada_jugada():
     reloj = tiempos(leer_pgn(PGN_PASTOR))
     antes, tardo = reloj[5]
@@ -145,6 +156,9 @@ def test_partida_de_chesscom_y_ajena():
     }
     partida = desde_chesscom(game, "ana")
     assert (partida.id, partida.color, partida.resultado, partida.apertura) == ("u-1", "black", "perdio", "Italian Game")
+    assert partida.precision_oficial is None
+    revisada = desde_chesscom({**game, "accuracies": {"white": 85.41, "black": 75.96}}, "ana")
+    assert revisada.precision_oficial == {"white": 85.4, "black": 76.0}
     assert desde_chesscom(game, "otro") is None
     assert desde_chesscom({**game, "rules": "chess960"}, "ana") is None
 
