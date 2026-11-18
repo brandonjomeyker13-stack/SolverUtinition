@@ -172,7 +172,15 @@ def test_guardar_del_navegador_calcula_los_totales(db, usuario_a, cuenta_a):
     assert AnalisisService(db).precisiones(usuario_a.id, Plataforma.CHESSCOM, ["u-1"]) == {"u-1": fila.precision}
 
     otra = AnalisisService(db).guardar_del_navegador(usuario_a, _entrada(evals=[{"cp": 0}] * 7))
-    assert otra.id == fila.id and otra.errores_graves == 0
+    assert otra.id == fila.id and otra.errores_graves == 0 and otra.segundas is None
+
+
+def test_guardar_la_segunda_mejor_de_cada_posicion(db, usuario_a, cuenta_a):
+    segundas = [{"cp": 10}, {"cp": 40}, None, {"mate": 2}, {"cp": -50}, {"cp": 300}, None]
+    fila = AnalisisService(db).guardar_del_navegador(usuario_a, _entrada(segundas=segundas))
+    assert fila.segundas == segundas
+    with pytest.raises(ValidationError):
+        AnalisisService(db).guardar_del_navegador(usuario_a, _entrada(segundas=segundas[:3]))
 
 
 def test_guardar_del_navegador_rechaza_partidas_ajenas_o_incompletas(db, usuario_a, cuenta_a):

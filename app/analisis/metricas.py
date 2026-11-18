@@ -1,4 +1,5 @@
-"""Las mismas fórmulas que publica Lichess, para que el número se parezca al suyo.
+"""Probabilidad de ganar y precisión con las fórmulas que publica Lichess; los
+umbrales de error con los de Chess.com (puntos esperados perdidos: 0.05, 0.10, 0.20).
 
 El front repite esto en `src/lib/analisis.ts`: si cambias una, cambia la otra.
 """
@@ -8,7 +9,7 @@ from typing import Any
 
 IMPRECISION = 5.0
 ERROR = 10.0
-ERROR_GRAVE = 15.0
+ERROR_GRAVE = 20.0
 CP_MATE = 10_000
 
 

@@ -49,6 +49,7 @@ class AnalisisIn(BaseModel):
     eval_inicial: Evaluacion
     evals: list[Evaluacion] = Field(max_length=1200)
     mejores: list[str | None] = Field(max_length=1200)
+    segundas: list[Evaluacion | None] | None = Field(default=None, max_length=1200)
 
 
 class AnalisisOut(BaseModel):
@@ -60,6 +61,7 @@ class AnalisisOut(BaseModel):
     eval_inicial: dict[str, Any]
     evals: list[dict[str, Any]]
     mejores: list[str | None]
+    segundas: list[dict[str, Any] | None] | None = None
     precision: float | None
     imprecisiones: int
     errores: int

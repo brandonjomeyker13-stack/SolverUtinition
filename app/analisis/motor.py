@@ -28,7 +28,7 @@ class Motor:
         self._engine = chess.engine.SimpleEngine.popen_uci(ruta)
         self._engine.configure({"Threads": max(1, os.cpu_count() or 1), "Hash": 128})
 
-    def analizar_pgn(self, pgn: str) -> tuple[dict, list[dict], list[str | None]] | None:
+    def analizar_pgn(self, pgn: str) -> tuple[dict, list[dict], list[str | None], list[dict | None]] | None:
         juego = leer_pgn(pgn)
         if juego is None:
             return None
@@ -40,19 +40,22 @@ class Motor:
 
         evals: list[dict] = []
         mejores: list[str | None] = []
+        segundas: list[dict | None] = []
         limite = chess.engine.Limit(nodes=self.nodos)
         for posicion in posiciones:
             fin = _final(posicion)
             if fin is not None:
                 evals.append(fin)
                 mejores.append(None)
+                segundas.append(None)
                 continue
-            info = self._engine.analyse(posicion, limite)
-            evals.append(_evaluacion(info["score"]))
-            pv = info.get("pv") or []
+            lineas = self._engine.analyse(posicion, limite, multipv=2)
+            evals.append(_evaluacion(lineas[0]["score"]))
+            pv = lineas[0].get("pv") or []
             mejores.append(pv[0].uci() if pv else None)
+            segundas.append(_evaluacion(lineas[1]["score"]) if len(lineas) > 1 else None)
         # La evaluación de cada posición es la "después" de la jugada anterior.
-        return evals[0], evals[1:], mejores[:-1]
+        return evals[0], evals[1:], mejores[:-1], segundas[:-1]
 
     def cerrar(self) -> None:
         self._engine.quit()

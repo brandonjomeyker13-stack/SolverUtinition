@@ -90,6 +90,8 @@ class AnalisisService:
         plies = sum(1 for _ in juego.mainline())
         if len(datos.evals) != plies or len(datos.mejores) != plies:
             raise ValidationError("El análisis no coincide con las jugadas de la partida")
+        if datos.segundas is not None and len(datos.segundas) != plies:
+            raise ValidationError("El análisis no coincide con las jugadas de la partida")
         return self.guardar(
             usuario_id=usuario.id,
             plataforma=datos.plataforma,
@@ -104,6 +106,7 @@ class AnalisisService:
             eval_inicial=datos.eval_inicial.model_dump(),
             evals=[e.model_dump() for e in datos.evals],
             mejores=datos.mejores,
+            segundas=None if datos.segundas is None else [s and s.model_dump() for s in datos.segundas],
             fuente="navegador",
             blancas_empiezan=juego.board().turn == chess.WHITE,
         )
@@ -115,6 +118,8 @@ class AnalisisService:
         eval_inicial: dict,
         evals: list[dict],
         mejores: list[str | None],
+        segundas: list[dict | None] | None = None,
+        *,
         fuente: str,
     ) -> AnalisisPartida:
         juego = leer_pgn(partida.pgn)
@@ -132,6 +137,7 @@ class AnalisisService:
             eval_inicial=eval_inicial,
             evals=evals,
             mejores=mejores,
+            segundas=segundas,
             fuente=fuente,
             blancas_empiezan=juego is None or juego.board().turn == chess.WHITE,
         )
@@ -158,6 +164,8 @@ class AnalisisService:
         fila.eval_inicial = eval_inicial
         fila.evals = evals
         fila.mejores = list(campos["mejores"])
+        segundas = campos.get("segundas")
+        fila.segundas = None if segundas is None else [s and _eval(s) for s in segundas]
         fila.precision = t.precision
         fila.imprecisiones = t.imprecisiones
         fila.errores = t.errores

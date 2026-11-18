@@ -15,6 +15,8 @@ class AnalisisPartida(Base, TimestampMixin):
     `evals[i]` es la evaluación después de la jugada i, desde las blancas:
     {"cp": 35} o {"mate": -3}. La de la posición inicial va en `eval_inicial`.
     `mejores[i]` es la mejor jugada (UCI) en la posición antes de la jugada i.
+    `segundas[i]` es la evaluación de la segunda mejor jugada en esa misma
+    posición (None si solo había una jugada legal o si no se calculó).
     """
 
     __tablename__ = "analisis_partidas"
@@ -41,6 +43,7 @@ class AnalisisPartida(Base, TimestampMixin):
     eval_inicial: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
     evals: Mapped[list[dict[str, Any]]] = mapped_column(JSON, nullable=False)
     mejores: Mapped[list[str | None]] = mapped_column(JSON, nullable=False)
+    segundas: Mapped[list[dict[str, Any] | None] | None] = mapped_column(JSON, nullable=True)
     precision: Mapped[float | None] = mapped_column(Float, nullable=True)
     imprecisiones: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     errores: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
